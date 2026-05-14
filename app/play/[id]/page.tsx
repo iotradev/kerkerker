@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { DramaDetail, VodSource } from "@/types/drama";
 import { UnifiedPlayer } from "@/components/player/UnifiedPlayer";
@@ -56,6 +56,12 @@ export default function PlayPage() {
   // 弹幕状态
   const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>([]);
   const [danmakuCount, setDanmakuCount] = useState(0);
+  
+  // 播放器容器引用
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 设置面板状态
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 从 API 获取视频源配置
   useEffect(() => {
@@ -298,13 +304,36 @@ export default function PlayPage() {
     }
   }, []);
 
-  // 切换全屏
+  // 增加音量
+  const volumeUp = useCallback(() => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      videoElement.volume = Math.min(videoElement.volume + 0.1, 1);
+    }
+  }, []);
+
+  // 减少音量
+  const volumeDown = useCallback(() => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      videoElement.volume = Math.max(videoElement.volume - 0.1, 0);
+    }
+  }, []);
+
+  // 切换播放器全屏
   const toggleFullscreen = useCallback(() => {
+    if (!playerContainerRef.current) return;
+    
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      playerContainerRef.current.requestFullscreen().catch(() => {});
     } else {
       document.exitFullscreen().catch(() => {});
     }
+  }, []);
+
+  // 切换设置面板
+  const toggleSettings = useCallback(() => {
+    setIsSettingsOpen(prev => !prev);
   }, []);
 
   // 返回列表
@@ -324,11 +353,11 @@ export default function PlayPage() {
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
-          previousEpisode();
+          volumeUp();
           break;
         case "ArrowDown":
           e.preventDefault();
-          nextEpisode();
+          volumeDown();
           break;
         case "ArrowLeft":
           e.preventDefault();
@@ -337,6 +366,19 @@ export default function PlayPage() {
         case "ArrowRight":
           e.preventDefault();
           forward5Seconds();
+          break;
+        case "PageUp":
+          e.preventDefault();
+          previousEpisode();
+          break;
+        case "PageDown":
+          e.preventDefault();
+          nextEpisode();
+          break;
+        case "s":
+        case "S":
+          e.preventDefault();
+          toggleSettings();
           break;
         case "f":
         case "F":
@@ -351,7 +393,7 @@ export default function PlayPage() {
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [previousEpisode, nextEpisode, forward5Seconds, rewind5Seconds, toggleFullscreen, goBack]);
+  }, [volumeUp, volumeDown, forward5Seconds, rewind5Seconds, previousEpisode, nextEpisode, toggleSettings, toggleFullscreen, goBack]);
 
   // 保存播放历史 - 统一使用视频源封面
   useEffect(() => {
@@ -460,6 +502,8 @@ export default function PlayPage() {
                 vodSource={currentVodSource}
                 onModeChange={setPlayerMode}
                 onIframePlayerChange={setCurrentIframePlayerIndex}
+                isOpen={isSettingsOpen}
+                onToggle={toggleSettings}
               />
             )}
             {/* 弹幕选择器 - 仅在本地模式下显示 */}
@@ -498,6 +542,7 @@ export default function PlayPage() {
           }`}
         >
           <div
+            ref={playerContainerRef}
             className={`relative w-full bg-black overflow-hidden ${
               isRightPanelOpen ? "aspect-video h-full" : "h-full"
             }`}
