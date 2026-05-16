@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "artplayer": "^5.3.0",
     "artplayer-plugin-danmuku": "^5.2.0",
     "axios": "^1.13.2",
