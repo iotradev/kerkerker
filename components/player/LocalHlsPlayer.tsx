@@ -315,6 +315,10 @@ export function LocalHlsPlayer({
 
               if (hlsSupported) {
                 // Chrome/Firefox/Android: 使用 HLS.js
+                if (hlsRef.current) {
+                  hlsRef.current.destroy();
+                  hlsRef.current = null;
+                }
                 const hls = new Hls(hlsConfig);
                 hlsRef.current = hls;
 
