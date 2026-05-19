@@ -13,12 +13,10 @@ function getDeviceId(): string {
   return id;
 }
 
-const HEARTBEAT_INTERVAL = 30000;
-
 export function useTracker() {
   const pathname = usePathname();
   const deviceIdRef = useRef<string>('');
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastPageRef = useRef<string>('');
 
   const sendHeartbeat = (page: string) => {
     const device_id = deviceIdRef.current;
@@ -38,18 +36,9 @@ export function useTracker() {
 
   useEffect(() => {
     const page = pathname;
-
+    if (page === lastPageRef.current) return;
+    lastPageRef.current = page;
     sendHeartbeat(page);
-
-    intervalRef.current = setInterval(() => {
-      sendHeartbeat(page);
-    }, HEARTBEAT_INTERVAL);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
   }, [pathname]);
 
   useEffect(() => {
