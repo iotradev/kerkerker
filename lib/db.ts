@@ -145,7 +145,7 @@ async function initializeDatabase(db: Db) {
     // track_page_log: 设备页面浏览历史
     const pageLog = db.collection(COLLECTIONS.TRACK_PAGE_LOG);
     await pageLog.createIndex({ device_id: 1, ts: -1 });
-    await pageLog.createIndex({ ts: 1 }, { expireAfterSeconds: 86400 * 7 });
+    await pageLog.createIndex({ ts: 1 }, { expireAfterSeconds: 86400 * 30 });
 
     globalForMongo.initialized = true;
     console.log('✅ MongoDB 数据库初始化完成');
