@@ -92,6 +92,7 @@ export default async function AdminPage() {
 
 function formatTime(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

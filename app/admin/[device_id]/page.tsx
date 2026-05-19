@@ -86,6 +86,7 @@ export default async function DeviceDetailPage({
 
 function fmtTime(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
