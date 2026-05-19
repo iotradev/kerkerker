@@ -137,6 +137,11 @@ async function initializeDatabase(db: Db) {
     const dailymotionConfigCollection = db.collection(COLLECTIONS.DAILYMOTION_CONFIG);
     await dailymotionConfigCollection.createIndex({ id: 1 }, { unique: true });
 
+    // active_visitors: device_id 唯一索引 + last_seen TTL 索引（1小时自动过期）
+    const activeVisitors = db.collection(COLLECTIONS.ACTIVE_VISITORS);
+    await activeVisitors.createIndex({ device_id: 1 }, { unique: true });
+    await activeVisitors.createIndex({ last_seen: 1 }, { expireAfterSeconds: 3600 });
+
     globalForMongo.initialized = true;
     console.log('✅ MongoDB 数据库初始化完成');
   } catch (error) {

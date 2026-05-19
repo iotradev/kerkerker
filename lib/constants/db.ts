@@ -19,6 +19,8 @@ export const COLLECTIONS = {
   DAILYMOTION_CONFIG: 'dailymotion_config',
   /** 播放器配置 */
   PLAYER_CONFIG: 'player_config',
+  /** 实时访客追踪 */
+  ACTIVE_VISITORS: 'active_visitors',
 } as const;
 
 /** 集合名称类型 */

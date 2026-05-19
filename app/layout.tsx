@@ -4,6 +4,7 @@ import Script from "next/script";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SWRProvider } from "@/components/providers/swr-provider";
+import { TrackerProvider } from "@/components/TrackerProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -64,10 +65,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <SWRProvider>
+         <SWRProvider>
           {children}
           <Analytics />
           <SpeedInsights />
+          <TrackerProvider />
         </SWRProvider>
       </body>
     </html>
