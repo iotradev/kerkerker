@@ -8,6 +8,9 @@ interface Visitor {
   current_page: string;
   last_seen: Date;
   first_seen: Date;
+  os?: string;
+  device?: string;
+  browser?: string;
 }
 
 export default async function AdminPage() {
@@ -21,16 +24,19 @@ export default async function AdminPage() {
   const now = Date.now();
 
   return (
-    <main style={{ maxWidth: 960, margin: '0 auto', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+    <main style={{ maxWidth: 1200, margin: '0 auto', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>实时访客监控</h1>
       <p style={{ color: '#666', marginBottom: 24 }}>
         当前在线访客：<strong>{visitors.length}</strong>
       </p>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: '#f5f5f5', textAlign: 'left' }}>
             <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>Device ID</th>
+            <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>OS</th>
+            <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>Device</th>
+            <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>Browser</th>
             <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>当前页面</th>
             <th style={{ padding: '10px 12px', borderBottom: '2px solid #ddd' }}>最后活跃</th>
           </tr>
@@ -38,7 +44,7 @@ export default async function AdminPage() {
         <tbody>
           {visitors.length === 0 ? (
             <tr>
-              <td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#999' }}>
+              <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#999' }}>
                 暂无在线访客
               </td>
             </tr>
@@ -50,7 +56,7 @@ export default async function AdminPage() {
 
               return (
                 <tr key={v.device_id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 13 }}>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12 }}>
                     <span
                       style={{
                         display: 'inline-block',
@@ -63,7 +69,10 @@ export default async function AdminPage() {
                     />
                     {v.device_id.slice(0, 8)}...
                   </td>
-                  <td style={{ padding: '10px 12px' }}>{v.current_page}</td>
+                  <td style={{ padding: '10px 12px' }}>{v.os || '-'}</td>
+                  <td style={{ padding: '10px 12px' }}>{v.device || '-'}</td>
+                  <td style={{ padding: '10px 12px' }}>{v.browser || '-'}</td>
+                  <td style={{ padding: '10px 12px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.current_page}</td>
                   <td style={{ padding: '10px 12px', color: '#666' }}>{formatTime(v.last_seen)}</td>
                 </tr>
               );
