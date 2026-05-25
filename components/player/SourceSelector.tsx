@@ -105,14 +105,14 @@ export function SourceSelector({ sources, currentSourceKey, onSourceChange }: So
       {/* 移动端背景遮罩 */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-[499] sm:hidden"
+          className="fixed inset-0 bg-black/50 z-[4999] sm:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* 下拉菜单 */}
       {isOpen && (
-        <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto top-[60px] sm:top-auto sm:right-0 sm:mt-3 sm:w-72 md:w-80 max-h-[calc(100dvh-80px)] sm:max-h-[60vh] bg-gray-900/98 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700 overflow-y-auto animate-fade-in z-[500]">
+        <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto top-[60px] sm:top-auto sm:right-0 sm:mt-3 sm:w-72 md:w-80 max-h-[calc(100dvh-80px)] sm:max-h-[60vh] bg-gray-900/98 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700 overflow-y-auto animate-fade-in z-[5000]">
           {/* 头部 */}
           <div className="p-3 border-b border-gray-800 bg-gradient-to-r from-gray-800/50 to-transparent">
             <div className="flex items-center justify-between">

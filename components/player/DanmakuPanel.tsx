@@ -138,12 +138,12 @@ export function DanmakuPanel({
     <>
       {/* 移动端背景遮罩 */}
       <div
-        className="fixed inset-0 bg-black/50 z-[99] sm:hidden"
+        className="fixed inset-0 bg-black/50 z-[4999] sm:hidden"
         onClick={onClose}
       />
 
       {/* 面板主体：移动端全屏fixed，桌面端侧边absolute */}
-      <div className="fixed inset-0 sm:absolute sm:inset-auto sm:top-0 sm:right-0 sm:w-80 sm:h-full bg-black/95 sm:bg-black/90 backdrop-blur-sm z-[100] sm:z-50 flex flex-col overflow-hidden">
+      <div className="fixed inset-0 sm:absolute sm:inset-auto sm:top-0 sm:right-0 sm:w-80 sm:h-full bg-black/95 sm:bg-black/90 backdrop-blur-sm z-[5000] sm:z-50 flex flex-col overflow-hidden">
         {/* 头部 */}
         <div className="flex items-center justify-between p-4 sm:p-3 border-b border-white/10">
           <div className="flex items-center gap-2 text-white">
