@@ -11,6 +11,7 @@ import type { DanmakuItem } from "@/lib/player/danmaku-service";
 import type { PlayerConfig } from "@/app/api/player-config/route";
 import { ArrowLeft, X, ChevronLeft } from "lucide-react";
 import { usePageTitle } from "@/hooks/PageTitleContext";
+import { PlayerOverlayProvider } from "@/hooks/PlayerOverlayContext";
 
 interface AvailableSource {
   source_key: string;
@@ -520,6 +521,7 @@ export default function PlayPage() {
   }
 
   return (
+    <PlayerOverlayProvider>
     <div
       className="w-full h-screen"
       style={{
@@ -973,5 +975,6 @@ export default function PlayPage() {
         ) : null}
       </div>
     </div>
+    </PlayerOverlayProvider>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useContext } from 'react';
+import { PlayerOverlayContext } from '@/hooks/PlayerOverlayContext';
 
 interface SourceInfo {
   source_key: string;
@@ -20,6 +21,15 @@ interface SourceSelectorProps {
 export function SourceSelector({ sources, currentSourceKey, onSourceChange }: SourceSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { setOverlayOpen } = useContext(PlayerOverlayContext);
+
+  // 通知播放器有面板打开（iframe 需隐藏）
+  useEffect(() => {
+    if (isOpen) {
+      setOverlayOpen(true);
+      return () => setOverlayOpen(false);
+    }
+  }, [isOpen, setOverlayOpen]);
 
   // 点击外部关闭下拉菜单
   useEffect(() => {

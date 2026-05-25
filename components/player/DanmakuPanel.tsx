@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import { PlayerOverlayContext } from "@/hooks/PlayerOverlayContext";
 import {
   Search,
   X,
@@ -33,8 +34,18 @@ export function DanmakuPanel({
   onClose,
   onDanmakuLoad,
 }: DanmakuPanelProps) {
-  // 状态
   const [searchKeyword, setSearchKeyword] = useState("");
+  const { setOverlayOpen } = useContext(PlayerOverlayContext);
+
+  // 通知播放器有面板打开（iframe 需隐藏）
+  useEffect(() => {
+    if (isOpen) {
+      setOverlayOpen(true);
+      return () => setOverlayOpen(false);
+    }
+  }, [isOpen, setOverlayOpen]);
+
+  // 状态
   const [animes, setAnimes] = useState<Anime[]>([]);
   const [selectedAnime, setSelectedAnime] = useState<Anime | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);

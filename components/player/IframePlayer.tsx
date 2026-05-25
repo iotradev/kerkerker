@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useContext } from 'react';
 import { IframePlayer as IframePlayerConfig } from '@/app/api/player-config/route';
 import type { VodSource } from '@/types/drama';
+import { PlayerOverlayContext } from '@/hooks/PlayerOverlayContext';
 
 interface IframePlayerProps {
   videoUrl: string;
@@ -29,10 +30,11 @@ export function IframePlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [playerError, setPlayerError] = useState(false);
-  
+  const { isOverlayOpen } = useContext(PlayerOverlayContext);
+
   // 使用外部传入的索引或内部索引
   const currentPlayerIndex = externalPlayerIndex !== undefined ? externalPlayerIndex : internalPlayerIndex;
-  
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
@@ -293,6 +295,7 @@ export function IframePlayer({
           key={playerUrl}
           src={playerUrl}
           className="w-full h-full"
+          style={{ visibility: isOverlayOpen ? 'hidden' : 'visible' }}
           allowFullScreen
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"

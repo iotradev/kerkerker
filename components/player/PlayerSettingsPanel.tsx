@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import type { PlayerConfig } from "@/app/api/player-config/route";
 import type { VodSource } from "@/types/drama";
+import { PlayerOverlayContext } from "@/hooks/PlayerOverlayContext";
 
 interface PlayerSettingsPanelProps {
   playerConfig: PlayerConfig;
@@ -31,6 +32,15 @@ export function PlayerSettingsPanel({
   // 使用外部控制的 isOpen 或内部状态
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsOpen = onToggle || setInternalIsOpen;
+  const { setOverlayOpen } = useContext(PlayerOverlayContext);
+
+  // 通知播放器有面板打开（iframe 需隐藏）
+  useEffect(() => {
+    if (isOpen) {
+      setOverlayOpen(true);
+      return () => setOverlayOpen(false);
+    }
+  }, [isOpen, setOverlayOpen]);
 
   // 切换到iframe模式时，自动选择视频源的专属播放器
   const handleModeChange = (mode: "iframe" | "local") => {
