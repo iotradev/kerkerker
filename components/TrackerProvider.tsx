@@ -1,11 +1,10 @@
 'use client';
 
-import { useContext } from 'react';
 import { useTracker } from '@/hooks/useTracker';
-import { PageTitleContext } from '@/hooks/PageTitleContext';
+import { usePageTitle } from '@/hooks/PageTitleContext';
 
 export function TrackerProvider() {
-  const { pageTitle } = useContext(PageTitleContext);
+  const { pageTitle } = usePageTitle();
   useTracker(pageTitle);
   return null;
 }
