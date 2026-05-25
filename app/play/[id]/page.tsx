@@ -61,6 +61,10 @@ export default function PlayPage() {
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const episodePanelRef = useRef<HTMLDivElement>(null);
   const seekFnRef = useRef<(delta: number) => void>(() => {});
+  const progressSaveTimerRef = useRef(0);
+
+  // 记忆播放位置
+  const [initialTime, setInitialTime] = useState(0);
   
   // 设置面板状态
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -353,6 +357,25 @@ export default function PlayPage() {
     }
   }, [currentEpisode, showAllEpisodes]);
 
+  // 加载当前剧集的记忆播放位置
+  useEffect(() => {
+    if (!dramaDetail) return;
+    const key = `play_progress_${dramaDetail.id}_${currentEpisode}`;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.time > 10) {
+          setInitialTime(data.time);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setInitialTime(0);
+  }, [dramaDetail, currentEpisode]);
+
   // 全屏状态变化时切换 body class（移动端隐藏导航/侧边栏）
   useEffect(() => {
     const handleFSChange = () => {
@@ -592,8 +615,23 @@ export default function PlayPage() {
                 vodSource={currentVodSource}
                 externalDanmaku={danmakuList}
                 onDanmakuCountChange={setDanmakuCount}
-                onProgress={() => {
-                  // 播放进度更新
+                initialTime={initialTime}
+                onProgress={(time) => {
+                  // 记忆播放位置（每5秒保存一次）
+                  if (dramaDetail && time > 0) {
+                    const now = Date.now();
+                    if (now - progressSaveTimerRef.current >= 5000) {
+                      progressSaveTimerRef.current = now;
+                      try {
+                        localStorage.setItem(
+                          `play_progress_${dramaDetail.id}_${currentEpisode}`,
+                          JSON.stringify({ time, timestamp: now })
+                        );
+                      } catch {
+                        // ignore
+                      }
+                    }
+                  }
                 }}
                 onEnded={() => {
                   if (currentEpisode < dramaDetail.episodes.length - 1) {

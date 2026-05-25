@@ -12,16 +12,18 @@ interface IframePlayerProps {
   onProgress?: (time: number) => void;
   onEnded?: () => void;
   onPlayerSwitch?: (playerIndex: number) => void;
+  initialTime?: number;
 }
 
-export function IframePlayer({ 
-  videoUrl, 
+export function IframePlayer({
+  videoUrl,
   players,
   currentPlayerIndex: externalPlayerIndex,
   vodSource,
   onProgress,
   onEnded,
-  onPlayerSwitch 
+  onPlayerSwitch,
+  initialTime,
 }: IframePlayerProps) {
   const [internalPlayerIndex, setInternalPlayerIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);

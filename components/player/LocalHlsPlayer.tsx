@@ -29,6 +29,7 @@ interface LocalHlsPlayerProps {
   seekFnRef?: React.MutableRefObject<(delta: number) => void>;
   onPrevEpisode?: () => void;
   onNextEpisode?: () => void;
+  initialTime?: number;
 }
 
 // 常量
@@ -48,6 +49,7 @@ export function LocalHlsPlayer({
   seekFnRef,
   onPrevEpisode,
   onNextEpisode,
+  initialTime,
 }: LocalHlsPlayerProps) {
   // 状态
   const [isLoading, setIsLoading] = useState(true);
@@ -89,6 +91,7 @@ export function LocalHlsPlayer({
   const onNextEpisodeRef = useRef(onNextEpisode);
   const settingsRef = useRef(settings);
   const videoUrlRef = useRef(videoUrl);
+  const initialTimeRef = useRef(initialTime);
   const showPrevBtn = !!onPrevEpisode;
   const showNextBtn = !!onNextEpisode;
 
@@ -101,6 +104,7 @@ export function LocalHlsPlayer({
     onNextEpisodeRef.current = onNextEpisode;
     settingsRef.current = settings;
     videoUrlRef.current = videoUrl;
+    initialTimeRef.current = initialTime;
   });
 
   // 确保在客户端执行
@@ -496,7 +500,11 @@ export function LocalHlsPlayer({
         art.on("video:loadedmetadata", () => {
           setIsLoading(false);
 
-          if (settingsRef.current.autoSaveProgress) {
+          // 优先使用稳定 key 传入的 initialTime，其次用 URL 作为 key 的旧进度
+          const it = initialTimeRef.current;
+          if (it && it > 10 && it < art.duration - 10) {
+            art.currentTime = it;
+          } else if (settingsRef.current.autoSaveProgress) {
             const saved = localStorage.getItem(
               `video_progress_${videoUrlRef.current}`
             );
