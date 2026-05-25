@@ -514,6 +514,12 @@ export default function PlayPage() {
             </div>
             <span className="hidden sm:inline">返回</span>
           </button>
+          <div className="hidden lg:flex items-center gap-2 text-white text-sm">
+            <span className="text-gray-400 text-xs">正在播放</span>
+            <span className="px-2.5 py-0.5 bg-red-600/90 rounded-md text-xs font-bold shadow-md shadow-red-500/30">
+              第{currentEpisode + 1}集
+            </span>
+          </div>
           <div className="flex items-center gap-3 md:gap-4">
             {/* 多源选择器 */}
             <SourceSelector
@@ -848,24 +854,42 @@ export default function PlayPage() {
                       </button>
                     </div>
 
-                    {/* 集数预览（显示前12集） */}
+                    {/* 集数预览（以当前剧集为中心，动态计算窗口） */}
                     <div className="grid grid-cols-4 gap-2.5 mb-4">
-                      {dramaDetail.episodes
-                        .slice(0, 12)
-                        .map((episode, index) => (
-                          <button
-                            key={index}
-                            data-episode-index={index}
-                            onClick={() => selectEpisode(index)}
-                            className={`rounded-lg flex flex-col text-xs lg:text-sm items-center justify-center p-2 transition-all duration-300 group relative overflow-hidden ${
-                              currentEpisode === index
-                                ? "bg-linear-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-500/40 ring-2 ring-red-400 scale-105"
-                                : "bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white hover:scale-105 backdrop-blur-sm"
-                            }`}
-                          >
-                            {episode.name}
-                          </button>
-                        ))}
+                      {(() => {
+                        const total = dramaDetail.episodes.length;
+                        const windowSize = Math.min(12, total);
+                        const half = Math.floor(windowSize / 2);
+                        const previewStart =
+                          total <= windowSize
+                            ? 0
+                            : Math.max(
+                                0,
+                                Math.min(
+                                  currentEpisode - half,
+                                  total - windowSize
+                                )
+                              );
+                        return dramaDetail.episodes
+                          .slice(previewStart, previewStart + windowSize)
+                          .map((episode, idx) => {
+                            const realIndex = previewStart + idx;
+                            return (
+                              <button
+                                key={realIndex}
+                                data-episode-index={realIndex}
+                                onClick={() => selectEpisode(realIndex)}
+                                className={`rounded-lg flex flex-col text-xs lg:text-sm items-center justify-center p-2 transition-all duration-300 group relative overflow-hidden ${
+                                  currentEpisode === realIndex
+                                    ? "bg-linear-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-500/40 ring-2 ring-red-400 scale-105"
+                                    : "bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white hover:scale-105 backdrop-blur-sm"
+                                }`}
+                              >
+                                {episode.name}
+                              </button>
+                            );
+                          });
+                      })()}
                     </div>
 
                     {/* 查看全部按钮 */}
