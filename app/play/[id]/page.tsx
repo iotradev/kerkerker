@@ -59,6 +59,7 @@ export default function PlayPage() {
   
   // 播放器容器引用
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const episodePanelRef = useRef<HTMLDivElement>(null);
   const seekFnRef = useRef<(delta: number) => void>(() => {});
   
   // 设置面板状态
@@ -340,6 +341,18 @@ export default function PlayPage() {
     }
   }, [router]);
 
+  // 切换集数时，滚动选集列表使当前剧集居中
+  useEffect(() => {
+    if (!episodePanelRef.current) return;
+    const container = episodePanelRef.current;
+    const activeBtn = container.querySelector(
+      `[data-episode-index="${currentEpisode}"]`
+    ) as HTMLElement | null;
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentEpisode, showAllEpisodes]);
+
   // 全屏状态变化时切换 body class（移动端隐藏导航/侧边栏）
   useEffect(() => {
     const handleFSChange = () => {
@@ -619,7 +632,7 @@ export default function PlayPage() {
 
         {/* 右侧：剧集信息和选择器 - Netflix风格 */}
         {isRightPanelOpen ? (
-          <div className="w-full lg:w-[380px] xl:w-[420px] bg-zinc-900 overflow-y-auto lg:max-h-[calc(100vh-65px)] relative play-right-panel">
+          <div ref={episodePanelRef} className="w-full lg:w-[380px] xl:w-[420px] bg-zinc-900 overflow-y-auto lg:max-h-[calc(100vh-65px)] relative play-right-panel">
             {/* 关闭按钮 */}
             <button
               onClick={() => setIsRightPanelOpen(false)}
@@ -670,6 +683,7 @@ export default function PlayPage() {
                     {dramaDetail.episodes.map((episode, index) => (
                       <button
                         key={index}
+                        data-episode-index={index}
                         onClick={() => {
                           selectEpisode(index);
                           setShowAllEpisodes(false);
@@ -841,6 +855,7 @@ export default function PlayPage() {
                         .map((episode, index) => (
                           <button
                             key={index}
+                            data-episode-index={index}
                             onClick={() => selectEpisode(index)}
                             className={`rounded-lg flex flex-col text-xs lg:text-sm items-center justify-center p-2 transition-all duration-300 group relative overflow-hidden ${
                               currentEpisode === index
