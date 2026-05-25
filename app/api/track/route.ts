@@ -5,7 +5,7 @@ import { UAParser } from 'ua-parser-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const { device_id, current_page } = await req.json();
+    const { device_id, current_page, page_title } = await req.json();
 
     if (!device_id || !current_page) {
       return NextResponse.json(
@@ -24,23 +24,41 @@ export async function POST(req: NextRequest) {
     const db = await getDatabase();
     const now = new Date();
 
+    const setFields: Record<string, unknown> = {
+      current_page,
+      last_seen: now,
+      browser,
+      os,
+      device,
+      ip,
+      ua,
+    };
+    if (page_title) {
+      setFields.page_title = page_title;
+    }
+
     await db.collection(COLLECTIONS.ACTIVE_VISITORS).updateOne(
       { device_id },
       {
-        $set: { current_page, last_seen: now, browser, os, device, ip, ua },
+        $set: setFields,
         $setOnInsert: { first_seen: now },
       },
       { upsert: true },
     );
 
-    await db.collection(COLLECTIONS.TRACK_PAGE_LOG).insertOne({
+    const logEntry: Record<string, unknown> = {
       device_id,
       path: current_page,
       ts: now,
       browser,
       os,
       device,
-    });
+    };
+    if (page_title) {
+      logEntry.page_title = page_title;
+    }
+
+    await db.collection(COLLECTIONS.TRACK_PAGE_LOG).insertOne(logEntry);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

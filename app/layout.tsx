@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SWRProvider } from "@/components/providers/swr-provider";
 import { TrackerProvider } from "@/components/TrackerProvider";
+import { PageTitleProvider } from "@/hooks/PageTitleContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -66,10 +67,12 @@ export default function RootLayout({
         suppressHydrationWarning
       >
          <SWRProvider>
-          {children}
-          <Analytics />
-          <SpeedInsights />
-          <TrackerProvider />
+          <PageTitleProvider>
+            {children}
+            <Analytics />
+            <SpeedInsights />
+            <TrackerProvider />
+          </PageTitleProvider>
         </SWRProvider>
       </body>
     </html>

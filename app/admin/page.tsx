@@ -6,6 +6,7 @@ import { COLLECTIONS } from '@/lib/constants/db';
 interface Visitor {
   device_id: string;
   current_page: string;
+  page_title?: string;
   last_seen: Date;
   first_seen: Date;
   os?: string;
@@ -148,9 +149,20 @@ export default async function AdminPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 max-w-56">
-                          <span className="font-mono text-xs text-gray-600 truncate block" title={v.current_page}>
-                            {v.current_page}
-                          </span>
+                          {v.page_title ? (
+                            <div>
+                              <span className="text-xs text-gray-900 font-medium truncate block">
+                                {v.page_title}
+                              </span>
+                              <span className="font-mono text-[10px] text-gray-400 truncate block mt-0.5" title={v.current_page}>
+                                {v.current_page}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-xs text-gray-600 truncate block" title={v.current_page}>
+                              {v.current_page}
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
                           {formatTime(v.last_seen)}

@@ -20,40 +20,45 @@ function getDeviceId(): string {
   return id;
 }
 
-export function useTracker() {
+export function useTracker(title?: string) {
   const pathname = usePathname();
   const deviceIdRef = useRef<string>('');
   const lastPageRef = useRef<string>('');
+  const lastTitleRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (isBot()) return;
     deviceIdRef.current = getDeviceId();
   }, []);
 
-  const sendHeartbeat = (page: string) => {
+  const sendHeartbeat = (page: string, t?: string) => {
     const device_id = deviceIdRef.current;
     if (!device_id) return;
+
+    const body: Record<string, string> = { device_id, current_page: page };
+    if (t) body.page_title = t;
 
     fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id, current_page: page }),
+      body: JSON.stringify(body),
       keepalive: true,
     }).catch(() => {});
   };
 
   useEffect(() => {
     const page = pathname;
-    if (page === lastPageRef.current) return;
+    if (page === lastPageRef.current && title === lastTitleRef.current) return;
     lastPageRef.current = page;
-    sendHeartbeat(page);
-  }, [pathname]);
+    lastTitleRef.current = title;
+    sendHeartbeat(page, title);
+  }, [pathname, title]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      sendHeartbeat(pathname);
+      sendHeartbeat(pathname, title);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [pathname]);
+  }, [pathname, title]);
 }

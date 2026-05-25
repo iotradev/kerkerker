@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 interface PageLog {
   path: string;
+  page_title?: string;
   ts: Date;
   browser?: string;
   os?: string;
@@ -106,6 +107,9 @@ export default async function DeviceDetailPage({
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
+                      页面内容
+                    </th>
+                    <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
                       页面路径
                     </th>
                     <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
@@ -116,6 +120,9 @@ export default async function DeviceDetailPage({
                 <tbody className="divide-y divide-gray-100">
                   {pageLog.map((log, i) => (
                     <tr key={i} className="hover:bg-blue-50/40 transition-colors">
+                      <td className="px-5 py-3 text-xs text-gray-900 font-medium max-w-48 truncate">
+                        {log.page_title || '-'}
+                      </td>
                       <td className="px-5 py-3 font-mono text-xs text-gray-700">{log.path}</td>
                       <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmtTime(log.ts)}</td>
                     </tr>

@@ -10,6 +10,7 @@ import { DanmakuSelector } from "@/components/player/DanmakuSelector";
 import type { DanmakuItem } from "@/lib/player/danmaku-service";
 import type { PlayerConfig } from "@/app/api/player-config/route";
 import { ArrowLeft, X, ChevronLeft } from "lucide-react";
+import { usePageTitle } from "@/hooks/PageTitleContext";
 
 interface AvailableSource {
   source_key: string;
@@ -65,6 +66,9 @@ export default function PlayPage() {
 
   // 记忆播放位置
   const [initialTime, setInitialTime] = useState(0);
+
+  // 上报页面标题给访客监控
+  usePageTitle(dramaDetail?.name);
   
   // 设置面板状态
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
