@@ -514,9 +514,10 @@ export default function PlayPage() {
             </div>
             <span className="hidden sm:inline">返回</span>
           </button>
-          <div className="hidden lg:flex items-center gap-2 text-white text-sm">
-            <span className="text-gray-400 text-xs">正在播放</span>
-            <span className="px-2.5 py-0.5 bg-red-600/90 rounded-md text-xs font-bold shadow-md shadow-red-500/30">
+          <div className="hidden lg:flex items-center gap-2 text-sm min-w-0">
+            <span className="text-gray-400 text-xs shrink-0">正在播放</span>
+            <span className="text-white/90 text-xs font-medium truncate max-w-[200px]">{dramaDetail?.name}</span>
+            <span className="px-2.5 py-0.5 bg-red-600/90 rounded-md text-xs font-bold shadow-md shadow-red-500/30 shrink-0">
               第{currentEpisode + 1}集
             </span>
           </div>
