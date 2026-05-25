@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 
-const PageTitleContext = createContext<{
+export const PageTitleContext = createContext<{
   pageTitle: string | undefined;
   setPageTitle: (title: string | undefined) => void;
 }>({
