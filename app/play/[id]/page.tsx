@@ -634,6 +634,14 @@ export default function PlayPage() {
                   }
                 }}
                 onEnded={() => {
+                  // 播完清除记忆位置
+                  try {
+                    localStorage.removeItem(
+                      `play_progress_${dramaDetail.id}_${currentEpisode}`
+                    );
+                  } catch {
+                    // ignore
+                  }
                   if (currentEpisode < dramaDetail.episodes.length - 1) {
                     selectEpisode(currentEpisode + 1);
                   }
