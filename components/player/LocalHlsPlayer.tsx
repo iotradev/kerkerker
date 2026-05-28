@@ -251,7 +251,7 @@ export function LocalHlsPlayer({
           color: "#FFFFFF", // 默认弹幕颜色，可以被单独弹幕项覆盖
           mode: 0, // 默认弹幕模式: 0: 滚动，1: 顶部，2: 底部
           modes: [0, 1, 2], // 弹幕可见的模式
-          fontSize: "4%", // 弹幕字体大小，使用百分比实现响应式
+          fontSize: 24, // 弹幕字体大小（像素）
           antiOverlap: true, // 弹幕是否防重叠
           synchronousPlayback: true, // 是否同步播放速度
           mount: undefined, // 弹幕发射器挂载点, 默认为播放器控制栏中部
@@ -265,11 +265,11 @@ export function LocalHlsPlayer({
           maxLength: 200, // 弹幕输入框最大长度, 范围在[1 ~ 1000]
           lockTime: 5, // 输入框锁定时间，范围在[1 ~ 60]
           theme: "dark", // 弹幕主题，支持 dark 和 light，只在自定义挂载时生效
-          OPACITY: {}, // 不透明度配置项
-          FONT_SIZE: {}, // 弹幕字号配置项
-          MARGIN: {}, // 显示区域配置项
-          SPEED: {}, // 弹幕速度配置项
-          COLOR: [], // 颜色列表配置项
+          OPACITY: { 1: 1, 0.5: 0.5, 0.25: 0.25 }, // 不透明度配置项
+          FONT_SIZE: { 小: 16, 中: 24, 大: 32, 超大: 48 }, // 弹幕字号配置项
+          MARGIN: { "1/4": "25%", "1/2": "50%", "3/4": "75%", 全部: "100%" }, // 显示区域配置项
+          SPEED: { 慢: 8, 中: 5, 快: 3 }, // 弹幕速度配置项
+          COLOR: ["#FFFFFF", "#FE0302", "#FFAA02", "#FFD302", "#A0EE00", "#00CD00", "#019899", "#4266BE", "#CC0273", "#FE0302"], // 颜色列表配置项
 
           // 手动发送弹幕前的过滤器，返回 true 则可以发送
           beforeEmit: () => Promise.resolve(true),
