@@ -246,7 +246,7 @@ export function LocalHlsPlayer({
           danmuku: [],
           // 以下为非必填
           speed: 5, // 弹幕持续时间，范围在[1 ~ 10]
-          margin: [5, "20%"], // 弹幕上下边距，移动端适配
+          margin: [10, "20%"], // 弹幕上下边距 [top, bottom]
           opacity: 1, // 弹幕透明度，范围在[0 ~ 1]
           color: "#FFFFFF", // 默认弹幕颜色，可以被单独弹幕项覆盖
           mode: 0, // 默认弹幕模式: 0: 滚动，1: 顶部，2: 底部
@@ -265,45 +265,6 @@ export function LocalHlsPlayer({
           maxLength: 200, // 弹幕输入框最大长度, 范围在[1 ~ 1000]
           lockTime: 5, // 输入框锁定时间，范围在[1 ~ 60]
           theme: "dark", // 弹幕主题，支持 dark 和 light，只在自定义挂载时生效
-          OPACITY: {
-            min: 0,
-            max: 1,
-            steps: [
-              { name: "25%", value: 0.25 },
-              { name: "50%", value: 0.5 },
-              { name: "75%", value: 0.75 },
-              { name: "100%", value: 1, show: true },
-            ],
-          },
-          FONT_SIZE: {
-            min: 12,
-            max: 48,
-            steps: [
-              { name: "小", value: 16 },
-              { name: "中", value: 24, show: true },
-              { name: "大", value: 32 },
-              { name: "超大", value: 48 },
-            ],
-          },
-          MARGIN: {
-            min: 0,
-            max: 100,
-            steps: [
-              { name: "1/4", value: "25%" },
-              { name: "1/2", value: "50%" },
-              { name: "3/4", value: "75%" },
-              { name: "全部", value: "100%", show: true },
-            ],
-          },
-          SPEED: {
-            min: 1,
-            max: 10,
-            steps: [
-              { name: "慢", value: 8 },
-              { name: "中", value: 5, show: true },
-              { name: "快", value: 3 },
-            ],
-          },
           COLOR: ["#FFFFFF", "#FE0302", "#FFAA02", "#FFD302", "#A0EE00", "#00CD00", "#019899", "#4266BE", "#CC0273"],
 
           // 手动发送弹幕前的过滤器，返回 true 则可以发送
