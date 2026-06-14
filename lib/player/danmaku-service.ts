@@ -311,7 +311,7 @@ export interface AutoLoadResult {
 
 /**
  * 自动匹配并加载弹幕
- * 多策略搜索：提取关键词 → 原始标题 → 简化标题
+ * 优先用 matchAnime（文件名匹配），失败再多策略关键词搜索
  */
 export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResult> {
   if (!videoTitle || videoTitle.trim() === "") {
@@ -325,7 +325,23 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
   console.log(`🔍 自动匹配弹幕: ${videoTitle}`);
 
   try {
-    // 收集去重后的搜索关键词
+    // 优先尝试 matchAnime 文件名匹配（API 自带模糊匹配能力）
+    const matchResult = await matchAnime(videoTitle);
+    if (matchResult?.success && matchResult.isMatched && matchResult.animeId && matchResult.episodeId) {
+      const danmaku = await getComments(matchResult.episodeId);
+      if (danmaku.length > 0) {
+        console.log(`✅ matchAnime 匹配成功: ${matchResult.animeTitle}`);
+        return {
+          success: true,
+          danmaku,
+          matchedTitle: matchResult.animeTitle,
+          episodeTitle: matchResult.episodeTitle,
+          message: `已加载 ${danmaku.length} 条弹幕`,
+        };
+      }
+    }
+
+    // fallback: 多策略关键词搜索
     const keywords: string[] = [];
     const seen = new Set<string>();
 
@@ -337,16 +353,13 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
       }
     };
 
-    // 策略1: 从标题提取关键词
     addKeyword(extractSearchKeyword(videoTitle));
 
-    // 策略2: 原始标题（去掉集数信息）
     const titleWithoutEpisode = videoTitle
       .replace(/[.\s_-]*(S\d+E\d+|第\d+[季集话]|EP?\d+|\d+集).*/gi, "")
       .trim();
     addKeyword(titleWithoutEpisode);
 
-    // 策略3: 只保留中文和字母数字
     const simplified = videoTitle
       .replace(/[.\s_-]*(S\d+E\d+|第\d+[季集话]|EP?\d+|\d+集).*/gi, "")
       .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, "")
@@ -354,7 +367,6 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
       .trim();
     addKeyword(simplified);
 
-    // 依次尝试每个关键词
     for (const keyword of keywords) {
       const result = await searchAndLoadDanmaku(keyword, videoTitle);
       if (result.success) {
