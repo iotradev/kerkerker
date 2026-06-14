@@ -14,7 +14,7 @@ import { PlayerErrorDisplay } from "./PlayerError";
 
 // 弹幕相关导入
 import type { DanmakuItem } from "@/lib/player/danmaku-service";
-import { autoLoadDanmaku } from "@/lib/player/danmaku-service";
+import { autoLoadDanmaku, loadDanmakuByAnimeId } from "@/lib/player/danmaku-service";
 import { Loader2 } from "lucide-react";
 
 interface LocalHlsPlayerProps {
@@ -22,6 +22,8 @@ interface LocalHlsPlayerProps {
   title: string;
   settings: LocalPlayerSettings;
   externalDanmaku?: DanmakuItem[];
+  selectedAnimeId?: number | null;
+  selectedEpisodeNumber?: number | null;
   onDanmakuCountChange?: (count: number) => void;
   onProgress?: (time: number) => void;
   onEnded?: () => void;
@@ -42,6 +44,8 @@ export function LocalHlsPlayer({
   title,
   settings,
   externalDanmaku,
+  selectedAnimeId,
+  selectedEpisodeNumber,
   onDanmakuCountChange,
   onProgress,
   onEnded,
@@ -549,7 +553,17 @@ export function LocalHlsPlayer({
 
     setAutoLoadStatus({ loading: true, message: "正在自动匹配弹幕..." });
 
-    autoLoadDanmaku(title).then((result) => {
+    // 优先使用用户手动选择的弹幕源
+    const loadFn = selectedAnimeId
+      ? (() => {
+          // 从标题提取集数，如 "进击的巨人 - 第5集" → 5
+          const epMatch = title.match(/第(\d+)集/);
+          const epNum = epMatch ? parseInt(epMatch[1]) : (selectedEpisodeNumber ?? 1);
+          return loadDanmakuByAnimeId(selectedAnimeId, epNum);
+        })()
+      : autoLoadDanmaku(title);
+
+    loadFn.then((result) => {
       if (!artRef.current) return;
 
       if (result.success && result.danmaku.length > 0) {
@@ -574,7 +588,7 @@ export function LocalHlsPlayer({
         }, 5000);
       }
     });
-  }, [title, playerReady]);
+  }, [title, playerReady, selectedAnimeId, selectedEpisodeNumber]);
 
   // HLS 错误处理函数
   function handleHlsError(

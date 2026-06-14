@@ -58,6 +58,8 @@ export default function PlayPage() {
   // 弹幕状态
   const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>([]);
   const [danmakuCount, setDanmakuCount] = useState(0);
+  const [selectedAnimeId, setSelectedAnimeId] = useState<number | null>(null);
+  const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number | null>(null);
   
   // 播放器容器引用
   const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -579,6 +581,10 @@ export default function PlayPage() {
                   setDanmakuList(danmaku);
                   setDanmakuCount(danmaku.length);
                 }}
+                onAnimeSelect={(animeId, episodeNumber) => {
+                  setSelectedAnimeId(animeId);
+                  setSelectedEpisodeNumber(episodeNumber);
+                }}
               />
             )}
             {/* 展开侧边栏按钮 */}
@@ -620,6 +626,8 @@ export default function PlayPage() {
                 currentIframePlayerIndex={currentIframePlayerIndex}
                 vodSource={currentVodSource}
                 externalDanmaku={danmakuList}
+                selectedAnimeId={selectedAnimeId}
+                selectedEpisodeNumber={currentEpisode + 1}
                 onDanmakuCountChange={setDanmakuCount}
                 initialTime={initialTime}
                 onProgress={(time) => {

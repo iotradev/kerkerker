@@ -377,3 +377,51 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
   }
 }
 
+/**
+ * 按指定动漫 ID 和集数加载弹幕（用于切集时保持同一弹幕源）
+ */
+export async function loadDanmakuByAnimeId(
+  animeId: number,
+  episodeNumber: number
+): Promise<AutoLoadResult> {
+  try {
+    const bangumi = await getBangumi(animeId);
+    if (!bangumi || bangumi.episodes.length === 0) {
+      return {
+        success: false,
+        danmaku: [],
+        message: "未找到剧集信息",
+      };
+    }
+
+    const targetEpisode =
+      bangumi.episodes.find(
+        (ep) => parseInt(ep.episodeNumber) === episodeNumber
+      ) || bangumi.episodes[Math.min(episodeNumber - 1, bangumi.episodes.length - 1)];
+
+    const danmaku = await getComments(targetEpisode.episodeId);
+    if (danmaku.length > 0) {
+      return {
+        success: true,
+        danmaku,
+        matchedTitle: bangumi.animeTitle,
+        episodeTitle: targetEpisode.episodeTitle,
+        message: `已加载 ${danmaku.length} 条弹幕`,
+      };
+    }
+
+    return {
+      success: false,
+      danmaku: [],
+      message: "该集暂无弹幕",
+    };
+  } catch (error) {
+    console.error("按 animeId 加载弹幕出错:", error);
+    return {
+      success: false,
+      danmaku: [],
+      message: "加载弹幕失败",
+    };
+  }
+}
+

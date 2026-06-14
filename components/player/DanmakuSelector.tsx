@@ -46,12 +46,14 @@ interface DanmakuSelectorProps {
   videoTitle: string;
   danmakuCount: number;
   onDanmakuLoad: (danmaku: DanmakuItem[]) => void;
+  onAnimeSelect?: (animeId: number, episodeNumber: number) => void;
 }
 
 export function DanmakuSelector({
   videoTitle,
   danmakuCount,
   onDanmakuLoad,
+  onAnimeSelect,
 }: DanmakuSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -151,7 +153,7 @@ export function DanmakuSelector({
 
   // 加载弹幕
   const handleLoadDanmaku = useCallback(async () => {
-    if (!selectedEpisode) return;
+    if (!selectedEpisode || !selectedAnime) return;
 
     setIsLoadingDanmaku(true);
     setError(null);
@@ -160,12 +162,13 @@ export function DanmakuSelector({
       const danmaku = await getComments(selectedEpisode.episodeId);
       setLoadedCount(danmaku.length);
       onDanmakuLoad(danmaku);
+      onAnimeSelect?.(selectedAnime.animeId, parseInt(selectedEpisode.episodeNumber));
     } catch {
       setError("加载弹幕失败");
     } finally {
       setIsLoadingDanmaku(false);
     }
-  }, [selectedEpisode, onDanmakuLoad]);
+  }, [selectedEpisode, selectedAnime, onDanmakuLoad, onAnimeSelect]);
 
   // 按回车搜索
   const handleKeyDown = (e: React.KeyboardEvent) => {
