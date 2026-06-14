@@ -71,7 +71,7 @@ export function LocalHlsPlayer({
   const danmakuPluginRef = useRef<ReturnType<
     typeof import("artplayer-plugin-danmuku").default
   > | null>(null);
-  const autoLoadAttemptedRef = useRef(false);
+  const [playerReady, setPlayerReady] = useState(false);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -185,6 +185,7 @@ export function LocalHlsPlayer({
 
     // 重置挂载状态（effect 重新执行时）
     isMountedRef.current = true;
+    setPlayerReady(false);
 
     const initPlayer = async () => {
       try {
@@ -416,49 +417,7 @@ export function LocalHlsPlayer({
         // 事件监听
         art.on("ready", () => {
           setIsLoading(false);
-
-          // 自动加载弹幕
-          if (!autoLoadAttemptedRef.current && title) {
-            autoLoadAttemptedRef.current = true;
-            setAutoLoadStatus({
-              loading: true,
-              message: "正在自动匹配弹幕...",
-            });
-
-            autoLoadDanmaku(title).then((result) => {
-              if (result.success && result.danmaku.length > 0) {
-                setDanmakuList(result.danmaku);
-                setAutoLoadStatus({
-                  loading: false,
-                  message: result.message,
-                  matchedTitle: result.matchedTitle,
-                });
-
-                // 加载弹幕到播放器
-
-                const plugin = art.plugins.artplayerPluginDanmuku as any;
-                if (plugin) {
-                  plugin.config({ danmuku: result.danmaku });
-                  plugin.load();
-                  console.log(`🎯 自动加载 ${result.danmaku.length} 条弹幕`);
-                }
-
-                // 3秒后清除提示
-                setTimeout(() => {
-                  setAutoLoadStatus({ loading: false, message: "" });
-                }, 3000);
-              } else {
-                setAutoLoadStatus({
-                  loading: false,
-                  message: result.message,
-                });
-                // 5秒后清除错误提示
-                setTimeout(() => {
-                  setAutoLoadStatus({ loading: false, message: "" });
-                }, 5000);
-              }
-            });
-          }
+          setPlayerReady(true);
 
           // 添加上一集/下一集控制按钮（通过 ref 避免闭包过期）
           if (onPrevEpisodeRef.current) {
@@ -576,6 +535,46 @@ export function LocalHlsPlayer({
       artRef.current.switchUrl(newUrl);
     }
   }, [videoUrl, getProxiedUrl]);
+
+  // 切集时自动重新加载弹幕
+  useEffect(() => {
+    if (!title || !playerReady || !artRef.current) return;
+
+    const plugin = artRef.current.plugins.artplayerPluginDanmuku as any;
+    if (!plugin) return;
+
+    // 清空当前弹幕
+    plugin.config({ danmuku: [] });
+    plugin.load();
+
+    setAutoLoadStatus({ loading: true, message: "正在自动匹配弹幕..." });
+
+    autoLoadDanmaku(title).then((result) => {
+      if (!artRef.current) return;
+
+      if (result.success && result.danmaku.length > 0) {
+        setDanmakuList(result.danmaku);
+        setAutoLoadStatus({
+          loading: false,
+          message: result.message,
+          matchedTitle: result.matchedTitle,
+        });
+
+        plugin.config({ danmuku: result.danmaku });
+        plugin.load();
+        console.log(`🎯 自动加载 ${result.danmaku.length} 条弹幕`);
+
+        setTimeout(() => {
+          setAutoLoadStatus({ loading: false, message: "" });
+        }, 3000);
+      } else {
+        setAutoLoadStatus({ loading: false, message: result.message });
+        setTimeout(() => {
+          setAutoLoadStatus({ loading: false, message: "" });
+        }, 5000);
+      }
+    });
+  }, [title, playerReady]);
 
   // HLS 错误处理函数
   function handleHlsError(
