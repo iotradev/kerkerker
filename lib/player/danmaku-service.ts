@@ -311,7 +311,7 @@ export interface AutoLoadResult {
 
 /**
  * 自动匹配并加载弹幕
- * 根据视频标题自动匹配动漫和剧集，然后加载弹幕
+ * 多策略搜索：提取关键词 → 原始标题 → 简化标题
  */
 export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResult> {
   if (!videoTitle || videoTitle.trim() === "") {
@@ -325,40 +325,41 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
   console.log(`🔍 自动匹配弹幕: ${videoTitle}`);
 
   try {
-    // 直接通过搜索匹配（matchAnime 需要 fileHash 才能准确匹配，跳过以节省一次请求）
-    const keyword = extractSearchKeyword(videoTitle);
-    if (keyword) {
-      const animes = await searchAnime(keyword);
-      if (animes.length > 0) {
-        // 获取第一个匹配的动漫的剧集
-        const bangumi = await getBangumi(animes[0].animeId);
-        if (bangumi && bangumi.episodes.length > 0) {
-          // 尝试从视频标题提取集数
-          const episodeMatch = videoTitle.match(/(?:E|EP|第)(\d+)(?:集|话)?/i) ||
-            videoTitle.match(/S\d+E(\d+)/i);
-          let targetEpisode = bangumi.episodes[0];
+    // 收集去重后的搜索关键词
+    const keywords: string[] = [];
+    const seen = new Set<string>();
 
-          if (episodeMatch) {
-            const episodeNum = parseInt(episodeMatch[1]);
-            const found = bangumi.episodes.find(
-              (ep) => parseInt(ep.episodeNumber) === episodeNum
-            );
-            if (found) {
-              targetEpisode = found;
-            }
-          }
+    const addKeyword = (kw: string) => {
+      const trimmed = kw.trim();
+      if (trimmed && trimmed.length >= 2 && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        keywords.push(trimmed);
+      }
+    };
 
-          const danmaku = await getComments(targetEpisode.episodeId);
-          if (danmaku.length > 0) {
-            return {
-              success: true,
-              danmaku,
-              matchedTitle: animes[0].animeTitle,
-              episodeTitle: targetEpisode.episodeTitle,
-              message: `已加载 ${danmaku.length} 条弹幕 (搜索匹配)`,
-            };
-          }
-        }
+    // 策略1: 从标题提取关键词
+    addKeyword(extractSearchKeyword(videoTitle));
+
+    // 策略2: 原始标题（去掉集数信息）
+    const titleWithoutEpisode = videoTitle
+      .replace(/[.\s_-]*(S\d+E\d+|第\d+[季集话]|EP?\d+|\d+集).*/gi, "")
+      .trim();
+    addKeyword(titleWithoutEpisode);
+
+    // 策略3: 只保留中文和字母数字
+    const simplified = videoTitle
+      .replace(/[.\s_-]*(S\d+E\d+|第\d+[季集话]|EP?\d+|\d+集).*/gi, "")
+      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    addKeyword(simplified);
+
+    // 依次尝试每个关键词
+    for (const keyword of keywords) {
+      const result = await searchAndLoadDanmaku(keyword, videoTitle);
+      if (result.success) {
+        console.log(`✅ 关键词 "${keyword}" 匹配成功`);
+        return result;
       }
     }
 
@@ -375,6 +376,53 @@ export async function autoLoadDanmaku(videoTitle: string): Promise<AutoLoadResul
       message: "自动加载失败，请手动搜索",
     };
   }
+}
+
+/**
+ * 用指定关键词搜索动漫并加载弹幕
+ */
+async function searchAndLoadDanmaku(
+  keyword: string,
+  originalTitle: string
+): Promise<AutoLoadResult> {
+  const animes = await searchAnime(keyword);
+  if (animes.length === 0) {
+    return { success: false, danmaku: [], message: "" };
+  }
+
+  const bangumi = await getBangumi(animes[0].animeId);
+  if (!bangumi || bangumi.episodes.length === 0) {
+    return { success: false, danmaku: [], message: "" };
+  }
+
+  // 从原始标题提取集数
+  const episodeMatch =
+    originalTitle.match(/(?:E|EP|第)(\d+)(?:集|话)?/i) ||
+    originalTitle.match(/S\d+E(\d+)/i);
+  let targetEpisode = bangumi.episodes[0];
+
+  if (episodeMatch) {
+    const episodeNum = parseInt(episodeMatch[1]);
+    const found = bangumi.episodes.find(
+      (ep) => parseInt(ep.episodeNumber) === episodeNum
+    );
+    if (found) {
+      targetEpisode = found;
+    }
+  }
+
+  const danmaku = await getComments(targetEpisode.episodeId);
+  if (danmaku.length > 0) {
+    return {
+      success: true,
+      danmaku,
+      matchedTitle: animes[0].animeTitle,
+      episodeTitle: targetEpisode.episodeTitle,
+      message: `已加载 ${danmaku.length} 条弹幕`,
+    };
+  }
+
+  return { success: false, danmaku: [], message: "" };
 }
 
 /**
