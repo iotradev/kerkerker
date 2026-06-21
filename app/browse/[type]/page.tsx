@@ -28,7 +28,7 @@ import {
   getTVCategories,
   getNewContent,
 } from "@/lib/douban-service";
-import type { CategoryData as ServiceCategoryData, Subject } from "@/lib/douban-service";
+import type { CategoryData as ServiceCategoryData } from "@/lib/douban-service";
 
 // ============ 页面配置 ============
 interface PageConfig {
@@ -70,8 +70,8 @@ const PAGE_CONFIG: Record<string, PageConfig> = {
     gradient: "from-green-500/5 via-transparent to-blue-500/5",
     bgColor1: "bg-green-500/10",
     bgColor2: "bg-blue-500/10",
-    hasFilters: false,
-    hasCategories: true,
+    hasFilters: true,
+    hasCategories: false,
   },
 };
 
@@ -277,12 +277,12 @@ export default function BrowsePage() {
     ? allMovies
     : allMovies.slice(0, page * ITEMS_PER_PAGE);
 
-  // 筛选状态
+  // 筛选状态（latest 默认按时间排序）
   const [filters, setFilters] = useState<Filters>({
     genre: "",
     year: "",
     region: "",
-    sort: "",
+    sort: pageType === "latest" ? "time" : "",
   });
 
   // 获取分类图标
@@ -327,45 +327,13 @@ export default function BrowsePage() {
         } else if (config.api === "tv") {
           data = await getTVCategories();
         } else if (config.api === "latest") {
-          // 合并电影/电视剧/最新三个数据源，按类型分组
-          const [moviesData, tvData, newData] = await Promise.all([
-            getMoviesCategories(),
-            getTVCategories(),
-            getNewContent(),
-          ]);
-
-          const toItems = (items: Subject[]) => {
-            const map = new Map<string, Subject>();
-            for (const item of items) {
-              if (!map.has(item.id)) map.set(item.id, item);
-            }
-            return Array.from(map.values());
-          };
-
-          const allMovieItems = toItems(moviesData.flatMap(c => c.data));
-          const allTvItems = toItems(tvData.flatMap(c => c.data));
-          const allNewItems = toItems(newData.flatMap(c => c.data));
-
-          const merged: ServiceCategoryData[] = [];
-
-          if (allMovieItems.length > 0) {
-            merged.push({ name: "电影", data: allMovieItems });
-          }
-          if (allTvItems.length > 0) {
-            merged.push({ name: "电视剧", data: allTvItems });
-          }
-
-          // 去重后追加其他内容（综艺等）
-          const existingIds = new Set<string>();
-          for (const item of [...allMovieItems, ...allTvItems]) {
-            existingIds.add(item.id);
-          }
-          const extraItems = allNewItems.filter(i => !existingIds.has(i.id));
-          if (extraItems.length > 0) {
-            merged.push({ name: "最新", data: extraItems });
-          }
-
-          data = merged;
+          // latest 页面：直接调用 getNewContent，传递筛选参数
+          data = await getNewContent({
+            genre: filters.genre || undefined,
+            year: filters.year || undefined,
+            region: filters.region || undefined,
+            sort: filters.sort || "time",
+          });
         }
 
         if (config.hasCategories) {
@@ -423,7 +391,7 @@ export default function BrowsePage() {
         setLoadingMore(false);
       }
     },
-    [config.api, config.hasCategories, config.hasFilters, filters]
+    [config.api, config.hasCategories, filters]
   );
 
   // 筛选条件变化时重置并重新加载
