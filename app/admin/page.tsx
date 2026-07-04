@@ -45,6 +45,8 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [pruning, setPruning] = useState(false);
+  const [pruneResult, setPruneResult] = useState<{ days: number; count: number } | null>(null);
 
   const fetchVisitors = useCallback(async () => {
     try {
@@ -60,6 +62,28 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  const handlePrune = async (days: number) => {
+    if (!confirm(`删除 ${days} 天以上未活跃的访客记录？`)) return;
+    setPruning(true);
+    setPruneResult(null);
+    try {
+      const res = await fetch('/api/track/prune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPruneResult({ days, count: data.deleted_visitors });
+        fetchVisitors();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setPruning(false);
+    }
+  };
 
   useEffect(() => {
     fetchVisitors();
@@ -103,6 +127,28 @@ export default function AdminPage() {
             >
               刷新
             </button>
+            <div className="flex items-center gap-2 border-l border-gray-200 pl-4 ml-2">
+              <button
+                onClick={() => handlePrune(7)}
+                disabled={pruning}
+                className="px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {pruning ? '清理中...' : '7天'}
+              </button>
+              <button
+                onClick={() => handlePrune(30)}
+                disabled={pruning}
+                className="px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                30天
+              </button>
+              <span className="text-xs text-gray-400">清理</span>
+              {pruneResult && (
+                <span className="text-xs text-emerald-600">
+                  已删除 {pruneResult.count} 条
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </header>
