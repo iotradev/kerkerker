@@ -8,6 +8,13 @@ const BOT_RE = /bot|crawl|spider|scrape|headless|slurp|facebook|twitter|discord|
 const HEARTBEAT_INTERVAL = 30_000;
 const DEBOUNCE_DELAY = 500;
 
+/** 从页面 meta 标签读取追踪令牌 */
+function getTrackToken(): string {
+  if (typeof document === 'undefined') return '';
+  const meta = document.querySelector('meta[name="track-token"]');
+  return meta?.getAttribute('content') || '';
+}
+
 /** 排除后台管理相关路径 */
 const ADMIN_PATHS = [/^\/admin($|\/)/, /^\/login($|\/)/];
 
@@ -69,7 +76,12 @@ export function useTracker(title?: string) {
     if (!device_id) return;
 
     const label = getPageLabel(page, t);
-    const body: Record<string, string> = { device_id, current_page: page, page_title: label };
+    const body: Record<string, string> = {
+      device_id,
+      current_page: page,
+      page_title: label,
+      track_token: getTrackToken(),
+    };
 
     fetch('/api/track', {
       method: 'POST',

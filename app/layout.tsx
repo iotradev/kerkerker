@@ -29,9 +29,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 每页生成唯一追踪令牌，用于校验请求真实性
+  const trackToken = crypto.randomUUID();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="track-token" content={trackToken} />
         {/* 移动端视频播放优化 - 防止浏览器接管视频 */}
         <meta
           name="viewport"
