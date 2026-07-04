@@ -45,6 +45,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [pruning, setPruning] = useState(false);
   const [pruneResult, setPruneResult] = useState<{ days: number; count: number } | null>(null);
 
@@ -62,6 +63,23 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  const handleDelete = async (deviceId: string) => {
+    if (!confirm(`删除访客 ${deviceId.slice(0, 8)}... 的记录？`)) return;
+    setDeleting(deviceId);
+    try {
+      const res = await fetch(`/api/track/${deviceId}/delete`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) {
+        setVisitors((prev) => prev.filter((v) => v.device_id !== deviceId));
+        setStats((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const handlePrune = async (days: number) => {
     if (!confirm(`删除 ${days} 天以上未活跃的访客记录？`)) return;
@@ -187,8 +205,11 @@ export default function AdminPage() {
                       当前页面
                     </th>
                     <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      最后活跃
-                    </th>
+                       最后活跃
+                     </th>
+                     <th className="text-right px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
+                       操作
+                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -271,6 +292,15 @@ export default function AdminPage() {
                         </td>
                         <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
                           {formatRelativeTime(secondsAgo)}
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            onClick={() => handleDelete(v.device_id)}
+                            disabled={deleting === v.device_id}
+                            className="px-2 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                          >
+                            {deleting === v.device_id ? '...' : '删除'}
+                          </button>
                         </td>
                       </tr>
                     );
