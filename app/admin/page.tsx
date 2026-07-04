@@ -1,18 +1,24 @@
-export const dynamic = 'force-dynamic';
+'use client';
 
-import { getDatabase } from '@/lib/db';
-import { COLLECTIONS } from '@/lib/constants/db';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 
 interface Visitor {
   device_id: string;
   current_page: string;
   page_title?: string;
-  last_seen: Date;
-  first_seen: Date;
+  last_seen: string;
+  first_seen: string;
   os?: string;
   device?: string;
   browser?: string;
   ip?: string;
+}
+
+interface Stats {
+  online: number;
+  total: number;
+  today: number;
 }
 
 const OS_ICONS: Record<string, string> = {
@@ -32,16 +38,36 @@ const BROWSER_ICONS: Record<string, string> = {
   'MIUI Browser': '📱',
 };
 
-export default async function AdminPage() {
-  const db = await getDatabase();
-  const visitors = await db
-    .collection<Visitor>(COLLECTIONS.ACTIVE_VISITORS)
-    .find({})
-    .sort({ last_seen: -1 })
-    .toArray();
+const REFRESH_INTERVAL = 5000; // 5 秒自动刷新
+
+export default function AdminPage() {
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  const fetchVisitors = useCallback(async () => {
+    try {
+      const res = await fetch('/api/track/visitors', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setVisitors(data.visitors || []);
+      setStats(data.stats || { online: 0, total: 0, today: 0 });
+      setLastUpdate(new Date());
+    } catch {
+      // 忽略网络错误，保持上次数据
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchVisitors();
+    const interval = setInterval(fetchVisitors, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchVisitors]);
 
   const now = Date.now();
-  const online = visitors.filter((v) => now - new Date(v.last_seen).getTime() < 35000);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,23 +75,45 @@ export default async function AdminPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">实时访客监控</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Realtime Visitor Dashboard</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Realtime Visitor Dashboard
+              {lastUpdate && (
+                <span className="ml-2 text-xs text-gray-400">
+                  · 更新于 {formatTime(lastUpdate)}
+                </span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{online.length}</div>
+              <div className="text-2xl font-bold text-emerald-600">{stats.online}</div>
               <div className="text-xs text-gray-500">在线</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-700">{visitors.length}</div>
-              <div className="text-xs text-gray-500">总计</div>
+              <div className="text-2xl font-bold text-gray-700">{stats.total}</div>
+              <div className="text-xs text-gray-500">活跃</div>
             </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.today}</div>
+              <div className="text-xs text-gray-500">今日</div>
+            </div>
+            <button
+              onClick={fetchVisitors}
+              className="ml-2 px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              刷新
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6">
-        {visitors.length === 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500 mb-3" />
+            <p className="text-gray-500">加载中...</p>
+          </div>
+        ) : visitors.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
             <div className="text-5xl mb-4">📡</div>
             <p className="text-gray-500 text-lg">暂无在线访客</p>
@@ -112,20 +160,23 @@ export default async function AdminPage() {
                           <div className="flex items-center gap-2.5">
                             <span
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                isOnline ? 'bg-emerald-500 shadow-sm shadow-emerald-200' : 'bg-gray-300'
+                                isOnline
+                                  ? 'bg-emerald-500 shadow-sm shadow-emerald-200'
+                                  : 'bg-gray-300'
                               }`}
                             />
-                            <a
+                            <Link
                               href={`/admin/${v.device_id}`}
                               className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
                             >
                               {v.device_id.slice(0, 8)}...
-                            </a>
+                            </Link>
                           </div>
                         </td>
                         <td className="px-5 py-3.5">
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                            {OS_ICONS[v.os || ''] && `${OS_ICONS[v.os || '']} `}{v.os || '-'}
+                            {OS_ICONS[v.os || ''] && `${OS_ICONS[v.os || '']} `}
+                            {v.os || '-'}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-gray-700 text-xs">
@@ -145,7 +196,9 @@ export default async function AdminPage() {
                         </td>
                         <td className="px-5 py-3.5">
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                            {BROWSER_ICONS[v.browser || ''] && `${BROWSER_ICONS[v.browser || '']} `}{v.browser || '-'}
+                            {BROWSER_ICONS[v.browser || ''] &&
+                              `${BROWSER_ICONS[v.browser || '']} `}
+                            {v.browser || '-'}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 max-w-56">
@@ -154,18 +207,24 @@ export default async function AdminPage() {
                               <span className="text-xs text-gray-900 font-medium truncate block">
                                 {v.page_title}
                               </span>
-                              <span className="font-mono text-[10px] text-gray-400 truncate block mt-0.5" title={v.current_page}>
+                              <span
+                                className="font-mono text-[10px] text-gray-400 truncate block mt-0.5"
+                                title={v.current_page}
+                              >
                                 {v.current_page}
                               </span>
                             </div>
                           ) : (
-                            <span className="font-mono text-xs text-gray-600 truncate block" title={v.current_page}>
+                            <span
+                              className="font-mono text-xs text-gray-600 truncate block"
+                              title={v.current_page}
+                            >
                               {v.current_page}
                             </span>
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
-                          {formatTime(v.last_seen)}
+                          {formatRelativeTime(secondsAgo)}
                         </td>
                       </tr>
                     );
@@ -183,10 +242,16 @@ export default async function AdminPage() {
 function formatTime(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
-    month: 'short',
-    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  }).format(new Date(date));
+  }).format(date);
+}
+
+function formatRelativeTime(secondsAgo: number): string {
+  if (secondsAgo < 5) return '刚刚';
+  if (secondsAgo < 60) return `${secondsAgo} 秒前`;
+  if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)} 分钟前`;
+  if (secondsAgo < 86400) return `${Math.floor(secondsAgo / 3600)} 小时前`;
+  return `${Math.floor(secondsAgo / 86400)} 天前`;
 }

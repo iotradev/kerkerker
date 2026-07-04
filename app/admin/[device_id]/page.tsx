@@ -1,40 +1,66 @@
-export const dynamic = 'force-dynamic';
+'use client';
 
-import { getDatabase } from '@/lib/db';
-import { COLLECTIONS } from '@/lib/constants/db';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
-interface PageLog {
-  path: string;
+interface Device {
+  device_id: string;
+  current_page: string;
   page_title?: string;
-  ts: Date;
-  browser?: string;
+  last_seen: string;
+  first_seen: string;
   os?: string;
   device?: string;
+  browser?: string;
+  ip?: string;
 }
 
-export default async function DeviceDetailPage({
-  params,
-}: {
-  params: Promise<{ device_id: string }>;
-}) {
-  const { device_id } = await params;
-  const db = await getDatabase();
+interface PageLogEntry {
+  path: string;
+  page_title?: string;
+  ts: string;
+}
 
-  const device = await db.collection(COLLECTIONS.ACTIVE_VISITORS).findOne(
-    { device_id },
-    { projection: { _id: 0 } },
-  );
+const REFRESH_INTERVAL = 5000;
 
-  const now = Date.now();
-  const isOnline = device && now - new Date(device.last_seen).getTime() < 35000;
+export default function DeviceDetailPage() {
+  const params = useParams();
+  const device_id = (params.device_id as string) || '';
 
-  const pageLog = await db
-    .collection<PageLog>(COLLECTIONS.TRACK_PAGE_LOG)
-    .find({ device_id })
-    .sort({ ts: -1 })
-    .limit(100)
-    .toArray();
+  const [device, setDevice] = useState<Device | null>(null);
+  const [pageLog, setPageLog] = useState<PageLogEntry[]>([]);
+  const [isOnline, setIsOnline] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDetail = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/track/${device_id}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setDevice(data.device || null);
+      setIsOnline(data.isOnline || false);
+      setPageLog(data.pageLog || []);
+    } catch {
+      // 忽略网络错误
+    } finally {
+      setLoading(false);
+    }
+  }, [device_id]);
+
+  useEffect(() => {
+    fetchDetail();
+    const interval = setInterval(fetchDetail, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchDetail]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -51,7 +77,9 @@ export default async function DeviceDetailPage({
             <h1 className="text-lg font-bold text-gray-900">设备详情</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+            <span
+              className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-300'}`}
+            />
             <span className="text-gray-500">{isOnline ? '在线' : '离线'}</span>
           </div>
         </div>
@@ -65,15 +93,21 @@ export default async function DeviceDetailPage({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <div className="text-xs text-gray-400 mb-1">操作系统</div>
-                <div className="font-medium text-sm text-gray-800">{device.os || '-'}</div>
+                <div className="font-medium text-sm text-gray-800">
+                  {device.os || '-'}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400 mb-1">设备类型</div>
-                <div className="font-medium text-sm text-gray-800">{device.device || '-'}</div>
+                <div className="font-medium text-sm text-gray-800">
+                  {device.device || '-'}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400 mb-1">浏览器</div>
-                <div className="font-medium text-sm text-gray-800">{device.browser || '-'}</div>
+                <div className="font-medium text-sm text-gray-800">
+                  {device.browser || '-'}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400 mb-1">首次访问</div>
@@ -92,7 +126,9 @@ export default async function DeviceDetailPage({
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800 text-sm">
               页面访问历史
-              <span className="text-gray-400 font-normal ml-2">最近 {pageLog.length} 条</span>
+              <span className="text-gray-400 font-normal ml-2">
+                最近 {pageLog.length} 条
+              </span>
             </h2>
           </div>
 
@@ -123,8 +159,12 @@ export default async function DeviceDetailPage({
                       <td className="px-5 py-3 text-xs text-gray-900 font-medium max-w-48 truncate">
                         {log.page_title || '-'}
                       </td>
-                      <td className="px-5 py-3 font-mono text-xs text-gray-700">{log.path}</td>
-                      <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmtTime(log.ts)}</td>
+                      <td className="px-5 py-3 font-mono text-xs text-gray-700">
+                        {log.path}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {fmtTime(log.ts)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -137,7 +177,7 @@ export default async function DeviceDetailPage({
   );
 }
 
-function fmtTime(date: Date): string {
+function fmtTime(date: string | Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
     month: 'short',
