@@ -45,24 +45,24 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [scope, setScope] = useState<'realtime' | 'history'>('realtime');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [pruning, setPruning] = useState(false);
   const [pruneResult, setPruneResult] = useState<{ days: number; count: number } | null>(null);
 
   const fetchVisitors = useCallback(async () => {
     try {
-      const res = await fetch('/api/track/visitors', { cache: 'no-store' });
+      const res = await fetch(`/api/track/visitors?scope=${scope}`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       setVisitors(data.visitors || []);
       setStats(data.stats || { online: 0, total: 0, today: 0 });
       setLastUpdate(new Date());
     } catch {
-      // 忽略网络错误，保持上次数据
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   const handleDelete = async (deviceId: string) => {
     if (!confirm(`删除访客 ${deviceId.slice(0, 8)}... 的记录？`)) return;
@@ -105,9 +105,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchVisitors();
-    const interval = setInterval(fetchVisitors, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchVisitors]);
+    if (scope === 'realtime') {
+      const interval = setInterval(fetchVisitors, REFRESH_INTERVAL);
+      return () => clearInterval(interval);
+    }
+  }, [fetchVisitors, scope]);
 
   const now = Date.now();
 
@@ -116,9 +118,11 @@ export default function AdminPage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">实时访客监控</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {scope === 'history' ? '访客列表' : '实时访客监控'}
+            </h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Realtime Visitor Dashboard
+              {scope === 'history' ? 'All-time Visitors' : 'Realtime Visitor Dashboard'}
               {lastUpdate && (
                 <span className="ml-2 text-xs text-gray-400">
                   · 更新于 {formatTime(lastUpdate)}
@@ -127,13 +131,27 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex items-center gap-6">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setScope('realtime')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${scope === 'realtime' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                实时
+              </button>
+              <button
+                onClick={() => setScope('history')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${scope === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                全部
+              </button>
+            </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-emerald-600">{stats.online}</div>
               <div className="text-xs text-gray-500">在线</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-700">{stats.total}</div>
-              <div className="text-xs text-gray-500">活跃</div>
+              <div className="text-xs text-gray-500">{scope === 'history' ? '总记录' : '活跃'}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{stats.today}</div>
@@ -180,8 +198,12 @@ export default function AdminPage() {
         ) : visitors.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
             <div className="text-5xl mb-4">📡</div>
-            <p className="text-gray-500 text-lg">暂无在线访客</p>
-            <p className="text-gray-400 text-sm mt-1">等待用户访问你的网站...</p>
+            <p className="text-gray-500 text-lg">
+              {scope === 'history' ? '暂无访客记录' : '暂无在线访客'}
+            </p>
+            <p className="text-gray-400 text-sm mt-1">
+              {scope === 'history' ? '等待用户首次访问你的网站...' : '等待用户访问你的网站...'}
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
