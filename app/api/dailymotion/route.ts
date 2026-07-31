@@ -113,16 +113,23 @@ async function fetchChannelDataFromRestAPI(
   // 使用 Dailymotion REST API v1
   const limit = 30;
   
-  // 获取用户信息
-  const userResponse = await fetch(
-    `https://api.dailymotion.com/user/${channelName}?fields=id,screenname,avatar_240_url`
-  );
-  
-  if (!userResponse.ok) {
-    throw new Error(`Failed to fetch user: ${userResponse.status}`);
+  // 获取用户信息（best-effort，失败不阻塞视频列表）
+  let displayName = channelName;
+  let avatar = '';
+  try {
+    const userResponse = await fetch(
+      `https://api.dailymotion.com/user/${channelName}?fields=id,screenname,avatar_240_url`
+    );
+    if (userResponse.ok) {
+      const userData = await userResponse.json();
+      displayName = userData.screenname || channelName;
+      avatar = userData.avatar_240_url || '';
+    } else {
+      console.log(`User info fetch failed (${userResponse.status}), using channel name`);
+    }
+  } catch (userError) {
+    console.log('User info fetch error, using channel name:', userError);
   }
-  
-  const userData = await userResponse.json();
   
   // 获取视频列表
   const videosResponse = await fetch(
@@ -149,9 +156,9 @@ async function fetchChannelDataFromRestAPI(
   });
   
   return {
-    name: userData.screenname || channelName,
+    name: displayName,
     handle: `@${channelName}`,
-    avatar: userData.avatar_240_url || '',
+    avatar,
     videos,
     hasMore: videosData.has_more,
     page: videosData.page,

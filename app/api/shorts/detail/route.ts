@@ -58,6 +58,13 @@ export async function GET(request: NextRequest) {
     }
 
     // 获取资源站配置
+    let sources: ShortDramaSource[] = [];
+    try {
+      sources = await getShortsSourcesFromDB();
+    } catch {
+      sources = [];
+    }
+
     let source: ShortDramaSource | null = null;
 
     if (sourceKey) {
@@ -66,7 +73,6 @@ export async function GET(request: NextRequest) {
 
     // 如果没有找到指定的源，尝试获取第一个可用的源
     if (!source) {
-      const sources = await getShortsSourcesFromDB();
       if (sources.length === 0) {
         return NextResponse.json(
           { code: 404, msg: "暂未配置短剧源", data: null },
@@ -76,52 +82,67 @@ export async function GET(request: NextRequest) {
       source = sources[0];
     }
 
-    const apiUrl = `${source.api}?ac=detail&ids=${ids}`;
+    // 尝试当前源，失败时按顺序回退到下一个源
+    let lastError: unknown = null;
+    const startIndex = Math.max(0, sources.findIndex((s) => s.key === source!.key));
 
-    const response = await fetch(apiUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      next: { revalidate: 3600 }, // 1小时缓存
-    });
+    for (let i = 0; i < sources.length; i++) {
+      const candidate = sources[(startIndex + i) % sources.length];
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+      try {
+        const apiUrl = `${candidate.api}?ac=detail&ids=${ids}`;
+
+        const response = await fetch(apiUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+          next: { revalidate: 3600 }, // 1小时缓存
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.list || data.list.length === 0) {
+          throw new Error("Short drama not found");
+        }
+
+        const item = data.list[0];
+        const episodes = parsePlayUrl(item.vod_play_url);
+
+        const detail: ShortDramaDetail = {
+          vod_id: item.vod_id,
+          vod_name: item.vod_name,
+          vod_pic: item.vod_pic || "",
+          vod_remarks: item.vod_remarks || "",
+          vod_blurb: item.vod_blurb || "",
+          vod_actor: item.vod_actor || "",
+          vod_director: item.vod_director || "",
+          vod_area: item.vod_area || "",
+          vod_year: item.vod_year || "",
+          type_name: item.type_name || "",
+          episodes: episodes,
+          source: candidate.key,
+        };
+
+        return NextResponse.json({
+          code: 200,
+          msg: "success",
+          data: detail,
+        });
+      } catch (e) {
+        lastError = e;
+        console.error(
+          `[Shorts Detail API] Source "${candidate.key}" failed, trying next:`,
+          e
+        );
+      }
     }
 
-    const data = await response.json();
-
-    if (!data.list || data.list.length === 0) {
-      return NextResponse.json(
-        { code: 404, msg: "短剧不存在", data: null },
-        { status: 404 }
-      );
-    }
-
-    const item = data.list[0];
-    const episodes = parsePlayUrl(item.vod_play_url);
-
-    const detail: ShortDramaDetail = {
-      vod_id: item.vod_id,
-      vod_name: item.vod_name,
-      vod_pic: item.vod_pic || "",
-      vod_remarks: item.vod_remarks || "",
-      vod_blurb: item.vod_blurb || "",
-      vod_actor: item.vod_actor || "",
-      vod_director: item.vod_director || "",
-      vod_area: item.vod_area || "",
-      vod_year: item.vod_year || "",
-      type_name: item.type_name || "",
-      episodes: episodes,
-      source: source.key,
-    };
-
-    return NextResponse.json({
-      code: 200,
-      msg: "success",
-      data: detail,
-    });
+    throw lastError || new Error("All sources failed");
   } catch (error) {
     console.error("[Shorts Detail API Error]", error);
     return NextResponse.json(
