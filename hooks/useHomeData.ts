@@ -34,7 +34,6 @@ export function useHomeData(): UseHomeDataReturn {
   const {
     data: categoryData,
     error: categoryError,
-    isLoading: categoryLoading,
     mutate: mutateCategories,
   } = useSWR(SWR_KEY_CATEGORIES, getNewContent);
 
@@ -73,17 +72,19 @@ export function useHomeData(): UseHomeDataReturn {
       return [];
     }
 
-    return categoryData.map((cat) => ({
-      name: cat.name,
-      data: cat.data.map((item) => ({
-        id: item.id,
-        title: item.title,
-        rate: item.rate,
-        cover: item.cover,
-        url: item.url,
-        episode_info: item.episode_info,
-      })),
-    }));
+    return categoryData
+      .filter((cat) => Array.isArray(cat.data) && cat.data.length > 0)
+      .map((cat) => ({
+        name: cat.name,
+        data: cat.data.map((item) => ({
+          id: item.id,
+          title: item.title,
+          rate: item.rate,
+          cover: item.cover,
+          url: item.url,
+          episode_info: item.episode_info,
+        })),
+      }));
   }, [categoryData]);
 
   // 刷新所有数据

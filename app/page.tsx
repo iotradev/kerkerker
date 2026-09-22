@@ -68,41 +68,39 @@ export default function HomePage() {
           {/* 分类列表区域 */}
           <div className="relative z-20 space-y-10 md:space-y-12 lg:space-y-16 pb-16">
 
-            {/* 渲染所有新 API 返回的分类 */}
-            {categories.length > 0
-              ? categories.map((category, index) => {
-                  // 转换数据格式为 DoubanMovie
-                  const movies: DoubanMovie[] = category.data.map(
-                    (item: NewApiMovie) => ({
-                      id: item.id,
-                      title: item.title,
-                      cover: item.cover || "",
-                      url: item.url || "",
-                      rate: item.rate || "",
-                      episode_info: (item.episode_info as string) || "",
-                      cover_x: (item.cover_x as number) || 0,
-                      cover_y: (item.cover_y as number) || 0,
-                      playable: (item.playable as boolean) || false,
-                      is_new: (item.is_new as boolean) || false,
-                    })
-                  );
-
-                  return (
-                    <CategoryRow
-                      key={index}
-                      title={category.name}
-                      icon={getCategoryIcon(category.name)}
-                      movies={movies}
-                      onMovieClick={handleMovieClick}
-                      onViewMore={() =>
-                        router.push(
-                          `/category/${getCategoryPath(category.name)}`
-                        )
-                      }
-                    />
-                  );
+            {/* 渲染所有新 API 返回的分类（空分类已在 useHomeData 过滤） */}
+            {categories.map((category, index) => {
+              // 转换数据格式为 DoubanMovie
+              const movies: DoubanMovie[] = category.data.map(
+                (item: NewApiMovie) => ({
+                  id: item.id,
+                  title: item.title,
+                  cover: item.cover || "",
+                  url: item.url || "",
+                  rate: item.rate || "",
+                  episode_info: (item.episode_info as string) || "",
+                  cover_x: (item.cover_x as number) || 0,
+                  cover_y: (item.cover_y as number) || 0,
+                  playable: (item.playable as boolean) || false,
+                  is_new: (item.is_new as boolean) || false,
                 })
-              : null}
+              );
+
+              return (
+                <CategoryRow
+                  key={index}
+                  title={category.name}
+                  icon={getCategoryIcon(category.name)}
+                  movies={movies}
+                  onMovieClick={handleMovieClick}
+                  onViewMore={() =>
+                    router.push(
+                      `/category/${getCategoryPath(category.name)}`
+                    )
+                  }
+                />
+              );
+            })}
           </div>
         </>
       )}
