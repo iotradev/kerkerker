@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { COLLECTIONS } from '@/lib/constants/db';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function POST() {
   try {
+    const unauthorized = await requireAdmin();
+    if (unauthorized) return unauthorized;
+
     const db = await getDatabase();
 
     const botFilter = {

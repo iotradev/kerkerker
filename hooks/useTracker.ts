@@ -41,6 +41,9 @@ function getPageLabel(path: string, title?: string): string {
   if (path.startsWith('/movie/')) return '电影详情';
   if (path.startsWith('/play/')) return '播放页';
   if (path.startsWith('/category/')) return '分类浏览';
+  if (path.startsWith('/browse/')) return '分类浏览';
+  if (path.startsWith('/history/')) return '观看历史';
+  if (path.startsWith('/shorts')) return '短剧';
   return path;
 }
 
@@ -57,6 +60,33 @@ function getDeviceId(): string {
     localStorage.setItem(key, id);
   }
   return id;
+}
+
+/** 会话 ID：每个标签页/浏览器会话一份，用于统计会话数 */
+function getSessionId(): string {
+  const key = 'track_session_id';
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+
+/** 采集客户端环境信息（语言、屏幕、时区、来源等） */
+function getClientMeta(): Record<string, string> {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {};
+  }
+  return {
+    referrer: document.referrer || '',
+    language: navigator.language || '',
+    languages: (navigator.languages || []).join(','),
+    screen: typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '',
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    tz_offset: String(new Date().getTimezoneOffset()),
+  };
 }
 
 export function useTracker(title?: string) {
@@ -81,6 +111,8 @@ export function useTracker(title?: string) {
       current_page: page,
       page_title: label,
       track_token: getTrackToken(),
+      session_id: getSessionId(),
+      ...getClientMeta(),
     };
 
     fetch('/api/track', {

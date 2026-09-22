@@ -15,6 +15,8 @@ const VALID_PATH_PATTERNS = [
   /^\/search/,
   /^\/calendar/,
   /^\/dailymotion/,
+  /^\/history/,
+  /^\/shorts/,
 ];
 
 /** UUID v4 格式 */
@@ -53,9 +55,33 @@ function maskIp(ip: string): string {
   return ip.length > 8 ? `${ip.slice(0, 8)}****` : '****';
 }
 
+/** 从来源 URL 提取可读来源域名 */
+function extractReferrerHost(referrer: string): string {
+  if (!referrer) return '';
+  try {
+    return new URL(referrer).host;
+  } catch {
+    return '';
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { device_id, current_page, page_title, track_token } = await req.json();
+    const body = await req.json();
+    const {
+      device_id,
+      current_page,
+      page_title,
+      track_token,
+      session_id,
+      referrer,
+      language,
+      languages,
+      screen,
+      viewport,
+      timezone,
+      tz_offset,
+    } = body;
 
     if (!device_id || !current_page) {
       return NextResponse.json(
@@ -99,51 +125,100 @@ export async function POST(req: NextRequest) {
 
     const parsed = new UAParser(ua);
     const browser = parsed.getBrowser().name || 'Unknown';
+    const browserVersion = parsed.getBrowser().version || '';
     const os = parsed.getOS().name || 'Unknown';
+    const osVersion = parsed.getOS().version || '';
     const device = parsed.getDevice().type || 'Desktop';
+    const deviceVendor = parsed.getDevice().vendor || '';
+    const deviceModel = parsed.getDevice().model || '';
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
     const ip = maskIp(rawIp);
 
     const db = await getDatabase();
     const now = new Date();
+    const visitors = db.collection(COLLECTIONS.ACTIVE_VISITORS);
+    const pageLogs = db.collection(COLLECTIONS.TRACK_PAGE_LOG);
+
+    const existing = await visitors.findOne(
+      { device_id },
+      { projection: { last_session_id: 1, _id: 0 } },
+    );
+    const isNew = !existing;
 
     const setFields: Record<string, unknown> = {
       current_page,
       last_seen: now,
       browser,
+      browser_version: browserVersion,
       os,
+      os_version: osVersion,
       device,
+      device_vendor: deviceVendor,
+      device_model: deviceModel,
       ip,
       ua,
     };
-    if (page_title) {
-      setFields.page_title = page_title;
+    if (page_title) setFields.page_title = page_title;
+    if (language) setFields.language = language;
+    if (languages) setFields.languages = languages;
+    if (screen) setFields.screen = screen;
+    if (viewport) setFields.viewport = viewport;
+    if (timezone) setFields.timezone = timezone;
+    if (tz_offset !== undefined && tz_offset !== '') setFields.tz_offset = tz_offset;
+
+    const insertFields: Record<string, unknown> = {
+      first_seen: now,
+      first_page: current_page,
+      page_views: 0,
+      session_count: 0,
+    };
+    // 来源只在首次写入，避免被后续心跳覆盖
+    if (isNew && referrer !== undefined) {
+      insertFields.referrer = referrer || '';
+      insertFields.referrer_host = extractReferrerHost(referrer || '');
     }
 
-    await db.collection(COLLECTIONS.ACTIVE_VISITORS).updateOne(
+    const incFields: Record<string, number> = {};
+    if (session_id) {
+      if (isNew) {
+        insertFields.session_count = 1;
+        insertFields.last_session_id = session_id;
+      } else if (!existing?.last_session_id || existing.last_session_id !== session_id) {
+        // 新会话：累加次数（字段不能同时出现在 $setOnInsert / $inc）
+        incFields.session_count = 1;
+        setFields.last_session_id = session_id;
+      }
+    }
+
+    const updateOps: Record<string, unknown> = {
+      $set: setFields,
+      $setOnInsert: insertFields,
+    };
+    if (Object.keys(incFields).length > 0) {
+      updateOps.$inc = incFields;
+    }
+
+    await visitors.updateOne({ device_id }, updateOps, { upsert: true });
+
+    // 页面切换时记录日志并累加 PV（同一路径的心跳不重复计）
+    const lastLog = await pageLogs.findOne(
       { device_id },
-      {
-        $set: setFields,
-        $setOnInsert: { first_seen: now },
-      },
-      { upsert: true },
+      { sort: { ts: -1 }, projection: { path: 1, _id: 0 } },
     );
 
-    const lastLog = await db
-      .collection<{ path: string }>(COLLECTIONS.TRACK_PAGE_LOG)
-      .findOne({ device_id }, { sort: { ts: -1 }, projection: { path: 1, _id: 0 } });
-
-    if (!lastLog || lastLog.path !== current_page) {
+    const isPageChange = !lastLog || lastLog.path !== current_page;
+    if (isPageChange) {
       const logEntry: Record<string, unknown> = {
         device_id,
         path: current_page,
         ts: now,
       };
-      if (page_title) {
-        logEntry.page_title = page_title;
-      }
+      if (page_title) logEntry.page_title = page_title;
+      if (session_id) logEntry.session_id = session_id;
+      if (referrer) logEntry.referrer = referrer;
 
-      await db.collection(COLLECTIONS.TRACK_PAGE_LOG).insertOne(logEntry);
+      await pageLogs.insertOne(logEntry);
+      await visitors.updateOne({ device_id }, { $inc: { page_views: 1 } });
     }
 
     return NextResponse.json({ ok: true });

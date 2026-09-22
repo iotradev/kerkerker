@@ -158,6 +158,7 @@ async function initializeDatabase(db: Db) {
     const pageLog = db.collection(COLLECTIONS.TRACK_PAGE_LOG);
     await pageLog.createIndex({ device_id: 1, ts: -1 });
     await pageLog.createIndex({ ts: 1 }, { expireAfterSeconds: 86400 * 30 });
+    await pageLog.createIndex({ session_id: 1 });
 
     globalForMongo.initialized = true;
     console.log('✅ MongoDB 数据库初始化完成');

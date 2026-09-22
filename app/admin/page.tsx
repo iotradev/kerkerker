@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Visitor {
   device_id: string;
@@ -9,16 +10,34 @@ interface Visitor {
   page_title?: string;
   last_seen: string;
   first_seen: string;
+  first_page?: string;
   os?: string;
+  os_version?: string;
   device?: string;
+  device_vendor?: string;
+  device_model?: string;
   browser?: string;
+  browser_version?: string;
   ip?: string;
+  language?: string;
+  screen?: string;
+  timezone?: string;
+  referrer?: string;
+  referrer_host?: string;
+  page_views?: number;
+  session_count?: number;
 }
 
 interface Stats {
   online: number;
+  online_all?: number;
   total: number;
   today: number;
+  today_new?: number;
+  today_returning?: number;
+  all_time?: number;
+  unique_ips?: number;
+  total_page_views?: number;
 }
 
 const OS_ICONS: Record<string, string> = {
@@ -41,18 +60,26 @@ const BROWSER_ICONS: Record<string, string> = {
 const REFRESH_INTERVAL = 5000; // 5 秒自动刷新
 
 export default function AdminPage() {
+  const router = useRouter();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [scope, setScope] = useState<'realtime' | 'history'>('realtime');
+  const [query, setQuery] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [pruning, setPruning] = useState(false);
   const [pruneResult, setPruneResult] = useState<{ days: number; count: number } | null>(null);
 
   const fetchVisitors = useCallback(async () => {
     try {
-      const res = await fetch(`/api/track/visitors?scope=${scope}`, { cache: 'no-store' });
+      const params = new URLSearchParams({ scope });
+      if (query.trim()) params.set('q', query.trim());
+      const res = await fetch(`/api/track/visitors?${params.toString()}`, { cache: 'no-store' });
+      if (res.status === 401) {
+        router.push(`/login?redirect=/admin`);
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setVisitors(data.visitors || []);
@@ -62,10 +89,10 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [scope]);
+  }, [scope, query, router]);
 
   const handleDelete = async (deviceId: string) => {
-    if (!confirm(`删除访客 ${deviceId.slice(0, 8)}... 的记录？`)) return;
+    if (!confirm(`删除访客 ${deviceId.slice(0, 8)}... 的记录（含浏览日志）？`)) return;
     setDeleting(deviceId);
     try {
       const res = await fetch(`/api/track/${deviceId}/delete`, { method: 'DELETE' });
@@ -82,7 +109,7 @@ export default function AdminPage() {
   };
 
   const handlePrune = async (days: number) => {
-    if (!confirm(`删除 ${days} 天以上未活跃的访客记录？`)) return;
+    if (!confirm(`删除 ${days} 天以上未活跃的访客及其浏览日志？`)) return;
     setPruning(true);
     setPruneResult(null);
     try {
@@ -105,18 +132,18 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchVisitors();
-    if (scope === 'realtime') {
+    if (scope === 'realtime' && !query.trim()) {
       const interval = setInterval(fetchVisitors, REFRESH_INTERVAL);
       return () => clearInterval(interval);
     }
-  }, [fetchVisitors, scope]);
+  }, [fetchVisitors, scope, query]);
 
   const now = Date.now();
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">
               {scope === 'history' ? '访客列表' : '实时访客监控'}
@@ -130,7 +157,7 @@ export default function AdminPage() {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
               <button
                 onClick={() => setScope('realtime')}
@@ -145,25 +172,27 @@ export default function AdminPage() {
                 全部
               </button>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{stats.online}</div>
-              <div className="text-xs text-gray-500">在线</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-700">{stats.total}</div>
-              <div className="text-xs text-gray-500">{scope === 'history' ? '总记录' : '活跃'}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.today}</div>
-              <div className="text-xs text-gray-500">今日</div>
-            </div>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索 ID / IP / 页面 / 系统..."
+              className="w-56 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <StatChip label="在线" value={stats.online} color="text-emerald-600" />
+            <StatChip label={scope === 'history' ? '总记录' : '活跃'} value={stats.total} color="text-gray-700" />
+            <StatChip label="今日" value={stats.today} color="text-blue-600" />
+            <StatChip label="新访客" value={stats.today_new ?? 0} color="text-indigo-600" />
+            <StatChip label="回访" value={stats.today_returning ?? 0} color="text-amber-600" />
+            <StatChip label="累计设备" value={stats.all_time ?? 0} color="text-gray-700" />
+            <StatChip label="独立 IP" value={stats.unique_ips ?? 0} color="text-slate-600" />
+            <StatChip label="总浏览" value={stats.total_page_views ?? 0} color="text-purple-600" />
             <button
               onClick={fetchVisitors}
-              className="ml-2 px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             >
               刷新
             </button>
-            <div className="flex items-center gap-2 border-l border-gray-200 pl-4 ml-2">
+            <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
               <button
                 onClick={() => handlePrune(7)}
                 disabled={pruning}
@@ -199,10 +228,10 @@ export default function AdminPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
             <div className="text-5xl mb-4">📡</div>
             <p className="text-gray-500 text-lg">
-              {scope === 'history' ? '暂无访客记录' : '暂无在线访客'}
+              {query ? '没有匹配的访客' : scope === 'history' ? '暂无访客记录' : '暂无在线访客'}
             </p>
             <p className="text-gray-400 text-sm mt-1">
-              {scope === 'history' ? '等待用户首次访问你的网站...' : '等待用户访问你的网站...'}
+              {query ? '换个关键词试试' : scope === 'history' ? '等待用户首次访问你的网站...' : '等待用户访问你的网站...'}
             </p>
           </div>
         ) : (
@@ -211,27 +240,15 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      Device ID
-                    </th>
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      系统
-                    </th>
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      设备
-                    </th>
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      浏览器
-                    </th>
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                      当前页面
-                    </th>
-                    <th className="text-left px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                       最后活跃
-                     </th>
-                     <th className="text-right px-5 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                       操作
-                     </th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">Device</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">系统 / 设备</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">浏览器</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">IP / 语言</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">当前页面</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">来源</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">访问</th>
+                    <th className="text-left px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">最后活跃</th>
+                    <th className="text-right px-4 py-3.5 font-semibold text-gray-600 text-xs uppercase tracking-wider">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -245,7 +262,7 @@ export default function AdminPage() {
                         key={v.device_id}
                         className="hover:bg-blue-50/40 transition-colors"
                       >
-                        <td className="px-5 py-3.5">
+                        <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
                             <span
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -254,43 +271,50 @@ export default function AdminPage() {
                                   : 'bg-gray-300'
                               }`}
                             />
-                            <Link
-                              href={`/admin/${v.device_id}`}
-                              className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              {v.device_id.slice(0, 8)}...
-                            </Link>
+                            <div>
+                              <Link
+                                href={`/admin/${v.device_id}`}
+                                className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                {v.device_id.slice(0, 8)}...
+                              </Link>
+                              <div className="text-[10px] text-gray-400 mt-0.5">
+                                首次 {formatShortDate(v.first_seen)}
+                              </div>
+                            </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                            {OS_ICONS[v.os || ''] && `${OS_ICONS[v.os || '']} `}
-                            {v.os || '-'}
-                          </span>
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium w-fit">
+                              {OS_ICONS[v.os || ''] && `${OS_ICONS[v.os || '']} `}
+                              {v.os || '-'}
+                              {v.os_version ? ` ${v.os_version}` : ''}
+                            </span>
+                            <span className="text-[11px] text-gray-500">
+                              {formatDeviceLabel(v)}
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-5 py-3.5 text-gray-700 text-xs">
-                          {v.device === 'mobile' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 text-xs font-medium">
-                              📱 Mobile
-                            </span>
-                          ) : v.device === 'tablet' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 text-xs font-medium">
-                              📟 Tablet
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
-                              💻 {v.device || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
                             {BROWSER_ICONS[v.browser || ''] &&
                               `${BROWSER_ICONS[v.browser || '']} `}
                             {v.browser || '-'}
+                            {v.browser_version ? ` ${v.browser_version.split('.')[0]}` : ''}
                           </span>
+                          {v.screen && (
+                            <div className="text-[10px] text-gray-400 mt-1">{v.screen}</div>
+                          )}
                         </td>
-                        <td className="px-5 py-3.5 max-w-56">
+                        <td className="px-4 py-3.5">
+                          <div className="font-mono text-xs text-gray-700">{v.ip || '-'}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">
+                            {v.language || '-'}
+                            {v.timezone ? ` · ${v.timezone}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 max-w-48">
                           {v.page_title ? (
                             <div>
                               <span className="text-xs text-gray-900 font-medium truncate block">
@@ -312,17 +336,49 @@ export default function AdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
+                        <td className="px-4 py-3.5 max-w-36">
+                          {v.referrer_host ? (
+                            <div>
+                              <span className="text-xs text-gray-700 truncate block">
+                                {v.referrer_host}
+                              </span>
+                              {v.first_page && (
+                                <span className="text-[10px] text-gray-400 truncate block mt-0.5">
+                                  入口 {v.first_page}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">直接访问</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <div className="text-xs text-gray-800 font-medium">
+                            {v.page_views ?? 0} PV
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            {v.session_count ?? 0} 会话
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-gray-500 whitespace-nowrap">
                           {formatRelativeTime(secondsAgo)}
                         </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => handleDelete(v.device_id)}
-                            disabled={deleting === v.device_id}
-                            className="px-2 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          >
-                            {deleting === v.device_id ? '...' : '删除'}
-                          </button>
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <Link
+                              href={`/admin/${v.device_id}`}
+                              className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                            >
+                              详情
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(v.device_id)}
+                              disabled={deleting === v.device_id}
+                              className="px-2 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                            >
+                              {deleting === v.device_id ? '...' : '删除'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -337,6 +393,25 @@ export default function AdminPage() {
   );
 }
 
+function StatChip({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="text-center min-w-[52px]">
+      <div className={`text-lg font-bold ${color}`}>{value}</div>
+      <div className="text-[10px] text-gray-500">{label}</div>
+    </div>
+  );
+}
+
+function formatDeviceLabel(v: Visitor): string {
+  const parts: string[] = [];
+  if (v.device === 'mobile') parts.push('📱 Mobile');
+  else if (v.device === 'tablet') parts.push('📟 Tablet');
+  else parts.push(`💻 ${v.device || 'Desktop'}`);
+  if (v.device_vendor) parts.push(v.device_vendor);
+  if (v.device_model) parts.push(v.device_model);
+  return parts.join(' ');
+}
+
 function formatTime(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
@@ -344,6 +419,17 @@ function formatTime(date: Date): string {
     minute: '2-digit',
     second: '2-digit',
   }).format(date);
+}
+
+function formatShortDate(value: string | undefined): string {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function formatRelativeTime(secondsAgo: number): string {
