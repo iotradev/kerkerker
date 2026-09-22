@@ -13,6 +13,8 @@ export interface ConfirmState {
   message: string;
   onConfirm: () => void | Promise<void>;
   danger?: boolean;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 // 统一导入回调 - 用于跨 Tab 导入
