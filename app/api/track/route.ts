@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { COLLECTIONS } from '@/lib/constants/db';
+import {
+  hashIp,
+  shouldStoreFullIp,
+  fullIpExpiresAt,
+} from '@/lib/ip-utils';
 import { UAParser } from 'ua-parser-js';
 
 const BOT_RE = /bot|crawl|spider|scrape|headless|slurp|facebook|twitter|discord|telegram|whatsapp/i;
@@ -43,16 +48,6 @@ function isRateLimited(key: string): boolean {
 
 function isValidPath(path: string): boolean {
   return VALID_PATH_PATTERNS.some((re) => re.test(path));
-}
-
-/** IP 脱敏：保留前两段，后两段替换为 * */
-function maskIp(ip: string): string {
-  if (!ip) return '';
-  const parts = ip.split('.');
-  if (parts.length === 4) {
-    return `${parts[0]}.${parts[1]}.*.*`;
-  }
-  return ip.length > 8 ? `${ip.slice(0, 8)}****` : '****';
 }
 
 /** 从来源 URL 提取可读来源域名 */
@@ -132,7 +127,9 @@ export async function POST(req: NextRequest) {
     const deviceVendor = parsed.getDevice().vendor || '';
     const deviceModel = parsed.getDevice().model || '';
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
-    const ip = maskIp(rawIp);
+    // 后台直接展示完整 IP；另存哈希用于独立 IP 去重
+    const ip = rawIp;
+    const ipHash = hashIp(rawIp);
 
     const db = await getDatabase();
     const now = new Date();
@@ -156,8 +153,19 @@ export async function POST(req: NextRequest) {
       device_vendor: deviceVendor,
       device_model: deviceModel,
       ip,
+      ip_hash: ipHash,
       ua,
     };
+
+    if (rawIp) {
+      if (shouldStoreFullIp()) {
+        setFields.ip_raw = rawIp;
+        setFields.ip_raw_expires = fullIpExpiresAt(now);
+      } else {
+        setFields.ip_raw = null;
+        setFields.ip_raw_expires = null;
+      }
+    }
     if (page_title) setFields.page_title = page_title;
     if (language) setFields.language = language;
     if (languages) setFields.languages = languages;

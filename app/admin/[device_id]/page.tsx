@@ -21,6 +21,7 @@ import {
   Link2,
   Radio,
   MonitorSmartphone,
+  Home,
 } from 'lucide-react';
 
 interface Device {
@@ -142,22 +143,31 @@ export default function DeviceDetailPage() {
               壳儿
             </Link>
           </div>
-          <div
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${
-              isOnline
-                ? 'text-emerald-400 bg-emerald-500/10 border-emerald-600/40'
-                : 'text-[#808080] bg-[#1f1f1f] border-[#333]'
-            }`}
-          >
-            {isOnline ? (
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-              </span>
-            ) : (
-              <span className="h-2 w-2 rounded-full bg-[#444]" />
-            )}
-            {isOnline ? '在线' : '离线'}
+          <div className="flex items-center gap-2">
+            <div
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                isOnline
+                  ? 'text-emerald-400 bg-emerald-500/10 border-emerald-600/40'
+                  : 'text-[#808080] bg-[#1f1f1f] border-[#333]'
+              }`}
+            >
+              {isOnline ? (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                </span>
+              ) : (
+                <span className="h-2 w-2 rounded-full bg-[#444]" />
+              )}
+              {isOnline ? '在线' : '离线'}
+            </div>
+            <Link
+              href="/"
+              className="px-3 py-1.5 text-xs text-white bg-[#E50914] hover:bg-[#B20710] rounded-lg transition-colors inline-flex items-center gap-1.5"
+            >
+              <Home size={13} />
+              回到前台
+            </Link>
           </div>
         </div>
       </header>
@@ -216,7 +226,7 @@ export default function DeviceDetailPage() {
                 value={formatDevice(device)}
               />
               <Field icon={<Globe size={13} />} label="浏览器" value={[device.browser, device.browser_version].filter(Boolean).join(' ') || '-'} />
-              <Field icon={<Fingerprint size={13} />} label="IP（脱敏）" value={device.ip || '-'} mono />
+              <Field icon={<Fingerprint size={13} />} label="IP" value={device.ip || '-'} mono />
               <Field icon={<Languages size={13} />} label="语言" value={device.language || '-'} />
               <Field icon={<MapPin size={13} />} label="屏幕 / 视口" value={[device.screen, device.viewport].filter(Boolean).join(' · ') || '-'} mono />
               <Field icon={<Clock size={13} />} label="时区" value={device.timezone || '-'} />

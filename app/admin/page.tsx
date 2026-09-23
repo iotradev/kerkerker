@@ -21,6 +21,7 @@ import {
   History,
   Radio,
   X,
+  Home,
 } from 'lucide-react';
 import { Toast, ConfirmDialog } from '@/components/Toast';
 import type { ToastState, ConfirmState } from '@/components/admin/types';
@@ -47,11 +48,11 @@ interface Visitor {
   referrer_host?: string;
   page_views?: number;
   session_count?: number;
+  has_full_ip?: boolean;
 }
 
 interface Stats {
   online: number;
-  online_all?: number;
   total: number;
   today: number;
   today_new?: number;
@@ -61,7 +62,7 @@ interface Stats {
   total_page_views?: number;
 }
 
-const REFRESH_INTERVAL = 5000;
+const REFRESH_INTERVAL = 15000;
 
 export default function AdminPage() {
   const router = useRouter();
@@ -69,7 +70,6 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [scope, setScope] = useState<'realtime' | 'history'>('realtime');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -78,7 +78,6 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // 搜索防抖
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(timer);
@@ -86,9 +85,12 @@ export default function AdminPage() {
 
   const fetchVisitors = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ scope });
+      const params = new URLSearchParams();
       if (debouncedQuery) params.set('q', debouncedQuery);
-      const res = await fetch(`/api/track/visitors?${params.toString()}`, { cache: 'no-store' });
+      const qs = params.toString();
+      const res = await fetch(`/api/track/visitors${qs ? `?${qs}` : ''}`, {
+        cache: 'no-store',
+      });
       if (res.status === 401) {
         router.push(`/login?redirect=/admin`);
         return;
@@ -102,7 +104,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [scope, debouncedQuery, router]);
+  }, [debouncedQuery, router]);
 
   const handleDelete = (deviceId: string) => {
     setConfirm({
@@ -170,17 +172,16 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchVisitors();
-    if (scope === 'realtime' && !debouncedQuery) {
+    if (!debouncedQuery) {
       const interval = setInterval(fetchVisitors, REFRESH_INTERVAL);
       return () => clearInterval(interval);
     }
-  }, [fetchVisitors, scope, debouncedQuery]);
+  }, [fetchVisitors, debouncedQuery]);
 
   const now = Date.now();
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-      {/* Header - Netflix Style */}
       <header className="bg-[#141414] border-b border-[#333] sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -192,36 +193,15 @@ export default function AdminPage() {
               <div>
                 <h1 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Radio size={18} className="text-[#E50914]" />
-                  {scope === 'history' ? '访客列表' : '实时访客监控'}
+                  访客列表
                 </h1>
                 <p className="text-xs text-[#808080] mt-0.5">
-                  {lastUpdate ? `更新于 ${formatTime(lastUpdate)}` : 'Realtime Visitor Dashboard'}
+                  {lastUpdate ? `更新于 ${formatTime(lastUpdate)}` : 'All-time Visitors'}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Scope 切换 */}
-              <div className="flex items-center gap-1 bg-[#1f1f1f] rounded-lg p-0.5 border border-[#333]">
-                <button
-                  onClick={() => setScope('realtime')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    scope === 'realtime' ? 'bg-[#E50914] text-white' : 'text-[#808080] hover:text-white'
-                  }`}
-                >
-                  实时
-                </button>
-                <button
-                  onClick={() => setScope('history')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    scope === 'history' ? 'bg-[#E50914] text-white' : 'text-[#808080] hover:text-white'
-                  }`}
-                >
-                  全部
-                </button>
-              </div>
-
-              {/* 搜索 */}
               <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#808080]" />
                 <input
@@ -269,13 +249,20 @@ export default function AdminPage() {
                 </button>
                 <span className="text-[10px] text-[#666] ml-0.5">清理</span>
               </div>
+
+              <Link
+                href="/"
+                className="px-3 py-1.5 text-xs text-white bg-[#E50914] hover:bg-[#B20710] rounded-lg transition-colors flex items-center gap-1.5 ml-1"
+              >
+                <Home size={13} />
+                回到前台
+              </Link>
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* KPI 指标卡 */}
         <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
           <KpiCard
             icon={<Activity size={16} className="text-emerald-400" />}
@@ -284,11 +271,7 @@ export default function AdminPage() {
             accent="text-emerald-400"
             highlight
           />
-          <KpiCard
-            icon={<Eye size={16} className="text-white" />}
-            label={scope === 'history' ? '总记录' : '活跃'}
-            value={stats.total}
-          />
+          <KpiCard icon={<Eye size={16} className="text-white" />} label="总记录" value={stats.total} />
           <KpiCard
             icon={<Users size={16} className="text-blue-400" />}
             label="今日"
@@ -327,7 +310,6 @@ export default function AdminPage() {
           />
         </section>
 
-        {/* 列表 */}
         {loading ? (
           <div className="bg-[#1a1a1a] rounded-xl border border-[#333] overflow-hidden">
             <div className="px-5 py-3 border-b border-[#333] bg-[#1f1f1f]">
@@ -349,7 +331,7 @@ export default function AdminPage() {
           <div className="bg-[#1a1a1a] rounded-xl border border-[#333] p-16 text-center">
             <Radio size={48} className="mx-auto mb-4 text-[#E50914]/70" strokeWidth={1.2} />
             <p className="text-[#b3b3b3] text-lg">
-              {debouncedQuery ? '没有匹配的访客' : scope === 'history' ? '暂无访客记录' : '暂无在线访客'}
+              {debouncedQuery ? '没有匹配的访客' : '暂无访客记录'}
             </p>
             <p className="text-[#666] text-sm mt-1">
               {debouncedQuery ? '换个关键词试试' : '等待用户访问你的网站...'}
