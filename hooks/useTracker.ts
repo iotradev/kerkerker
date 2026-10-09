@@ -3,10 +3,20 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-const BOT_RE = /bot|crawl|spider|scrape|headless|slurp|facebook|twitter|discord|telegram|whatsapp/i;
+const BOT_RE = /bot|crawl|spider|scrape|slurp|facebook|twitter|discord|telegram|whatsapp/i;
 
 const HEARTBEAT_INTERVAL = 30_000;
 const DEBOUNCE_DELAY = 500;
+
+function createId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 /** 从页面 meta 标签读取追踪令牌 */
 function getTrackToken(): string {
@@ -54,23 +64,33 @@ function isBot(): boolean {
 
 function getDeviceId(): string {
   const key = 'track_device_id';
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
+  try {
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = createId();
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return createId();
   }
-  return id;
 }
 
 /** 会话 ID：每个标签页/浏览器会话一份，用于统计会话数 */
-function getSessionId(): string {
-  const key = 'track_session_id';
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
+function getSessionId(fallbackId: string): string {
+  const key = 'track_session_v2';
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(key);
+    const existing = raw ? JSON.parse(raw) as { id?: string; lastSeen?: number } : null;
+    const id = existing?.id && typeof existing.lastSeen === 'number' && now - existing.lastSeen < 30 * 60_000
+      ? existing.id
+      : createId();
+    localStorage.setItem(key, JSON.stringify({ id, lastSeen: now }));
+    return id;
+  } catch {
+    return fallbackId;
   }
-  return id;
 }
 
 /** 采集客户端环境信息（语言、屏幕、时区、来源等） */
@@ -92,6 +112,8 @@ function getClientMeta(): Record<string, string> {
 export function useTracker(title?: string) {
   const pathname = usePathname();
   const deviceIdRef = useRef<string>('');
+  const fallbackSessionIdRef = useRef(createId());
+  const pageViewRef = useRef<{ path: string; id: string }>({ path: '', id: '' });
   const lastPageRef = useRef<string>('');
   const lastTitleRef = useRef<string | undefined>(undefined);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,9 +131,10 @@ export function useTracker(title?: string) {
     const body: Record<string, string> = {
       device_id,
       current_page: page,
+      page_view_id: pageViewRef.current.id,
       page_title: label,
       track_token: getTrackToken(),
-      session_id: getSessionId(),
+      session_id: getSessionId(fallbackSessionIdRef.current),
       ...getClientMeta(),
     };
 
@@ -135,6 +158,9 @@ export function useTracker(title?: string) {
     debounceTimerRef.current = setTimeout(() => {
       lastPageRef.current = page;
       lastTitleRef.current = title;
+      if (pageViewRef.current.path !== page) {
+        pageViewRef.current = { path: page, id: createId() };
+      }
       sendHeartbeat(page, title);
     }, DEBOUNCE_DELAY);
 

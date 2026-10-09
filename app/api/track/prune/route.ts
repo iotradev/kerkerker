@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
     const delLogs = deviceIds.length
       ? await db.collection(COLLECTIONS.TRACK_PAGE_LOG).deleteMany({ device_id: { $in: deviceIds } })
       : { deletedCount: 0 };
+    if (deviceIds.length) {
+      await db.collection(COLLECTIONS.TRACK_SESSIONS).deleteMany({ device_id: { $in: deviceIds } });
+    }
 
     return NextResponse.json({
       ok: true,

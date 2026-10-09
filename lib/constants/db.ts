@@ -21,6 +21,7 @@ export const COLLECTIONS = {
   PLAYER_CONFIG: 'player_config',
   /** 实时访客追踪 */
   ACTIVE_VISITORS: 'active_visitors',
+  TRACK_SESSIONS: 'track_sessions',
   /** 页面访问日志 */
   TRACK_PAGE_LOG: 'track_page_log',
 } as const;

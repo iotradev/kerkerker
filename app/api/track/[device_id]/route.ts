@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { COLLECTIONS } from '@/lib/constants/db';
 import { requireAdmin } from '@/lib/require-admin';
+import { safeDisplayIp } from '@/lib/ip-utils';
+
+function legacyReferrerHost(referrer: unknown): string | undefined {
+  if (typeof referrer !== 'string' || !referrer) return undefined;
+  try {
+    return new URL(referrer).host;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function GET(
   _req: NextRequest,
@@ -22,7 +32,7 @@ export async function GET(
     );
 
     const now = Date.now();
-    const isOnline = device && now - new Date(device.last_seen).getTime() < 35000;
+    const isOnline = device && now - new Date(device.last_seen).getTime() < 90_000;
 
     const [pageLog, statsAgg, topPages, sessionCount, pathCount] = await Promise.all([
       pageLogCol
@@ -72,7 +82,28 @@ export async function GET(
     return NextResponse.json({
       device: device
         ? {
-            ...device,
+            device_id: device.device_id,
+            current_page: device.current_page,
+            page_title: device.page_title,
+            last_seen: device.last_seen,
+            first_seen: device.first_seen,
+            first_page: device.first_page,
+            os: device.os,
+            os_version: device.os_version,
+            device: device.device,
+            device_vendor: device.device_vendor,
+            device_model: device.device_model,
+            browser: device.browser,
+            browser_version: device.browser_version,
+            ip: safeDisplayIp(device.ip),
+            language: device.language,
+            languages: device.languages,
+            screen: device.screen,
+            viewport: device.viewport,
+            timezone: device.timezone,
+            tz_offset: device.tz_offset,
+            referrer_host: device.referrer_host,
+            ua: device.ua,
             page_views: device.page_views ?? stats?.page_views ?? 0,
             session_count: device.session_count ?? sessionCount.length ?? 0,
             _id: device._id?.toString(),
@@ -84,7 +115,7 @@ export async function GET(
         page_title: log.page_title,
         ts: log.ts,
         session_id: log.session_id,
-        referrer: log.referrer,
+        referrer_host: log.referrer_host || legacyReferrerHost(log.referrer),
         _id: log._id?.toString(),
       })),
       insights: {

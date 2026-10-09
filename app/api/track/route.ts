@@ -1,27 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isIP } from 'node:net';
 import { getDatabase } from '@/lib/db';
 import { COLLECTIONS } from '@/lib/constants/db';
 import {
   hashIp,
+  maskIp,
   shouldStoreFullIp,
   fullIpExpiresAt,
 } from '@/lib/ip-utils';
 import { UAParser } from 'ua-parser-js';
 
-const BOT_RE = /bot|crawl|spider|scrape|headless|slurp|facebook|twitter|discord|telegram|whatsapp/i;
+const BOT_RE = /bot|crawl|spider|scrape|slurp|facebook|twitter|discord|telegram|whatsapp/i;
 
 /** 有效页面路径模式 */
 const VALID_PATH_PATTERNS = [
   /^\/$/,
   /^\/browse\/(latest|movies|tv)$/,
-  /^\/movie\/[a-zA-Z0-9_]+$/,
-  /^\/play\/[a-zA-Z0-9_]+$/,
-  /^\/category\/[a-zA-Z0-9_]+$/,
-  /^\/search/,
-  /^\/calendar/,
-  /^\/dailymotion/,
-  /^\/history/,
-  /^\/shorts/,
+  /^\/(movie|play|category)\/[^/?#]{1,200}$/,
+  /^\/search(?:\/|$)/,
+  /^\/calendar(?:\/|$)/,
+  /^\/dailymotion(?:\/|$)/,
+  /^\/history(?:\/|$)/,
+  /^\/shorts(?:\/|$)/,
 ];
 
 /** UUID v4 格式 */
@@ -30,11 +30,11 @@ const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 /** 简单内存速率限制 */
 const RATE_LIMIT_MAP = new Map<string, number>();
 const RATE_LIMIT_WINDOW = 5_000;
-const RATE_LIMIT_MAX = 3;
+const RATE_LIMIT_MAX = 10;
 
-function isRateLimited(key: string): boolean {
+function isRateLimited(key: string, max = RATE_LIMIT_MAX): boolean {
   const count = RATE_LIMIT_MAP.get(key) || 0;
-  if (count >= RATE_LIMIT_MAX) {
+  if (count >= max) {
     return true;
   }
   RATE_LIMIT_MAP.set(key, count + 1);
@@ -63,9 +63,13 @@ function extractReferrerHost(referrer: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'invalid request body' }, { status: 400 });
+    }
     const {
       device_id,
       current_page,
+      page_view_id,
       page_title,
       track_token,
       session_id,
@@ -78,14 +82,23 @@ export async function POST(req: NextRequest) {
       tz_offset,
     } = body;
 
-    if (!device_id || !current_page) {
+    if (!device_id || typeof current_page !== 'string' || current_page.length > 512) {
       return NextResponse.json(
         { error: 'device_id and current_page are required' },
         { status: 400 },
       );
     }
+    if (typeof device_id !== 'string' || !UUID_V4_RE.test(device_id)) {
+      return NextResponse.json({ error: 'invalid device_id' }, { status: 400 });
+    }
+    if (session_id && (typeof session_id !== 'string' || !UUID_V4_RE.test(session_id))) {
+      return NextResponse.json({ error: 'invalid session_id' }, { status: 400 });
+    }
+    if (page_view_id && (typeof page_view_id !== 'string' || !UUID_V4_RE.test(page_view_id))) {
+      return NextResponse.json({ error: 'invalid page_view_id' }, { status: 400 });
+    }
 
-    // 校验追踪令牌（防止伪造请求）
+    // Keep malformed clients from reaching storage; this public token is not authentication.
     if (!track_token || !UUID_V4_RE.test(track_token)) {
       return NextResponse.json({ error: 'invalid track token' }, { status: 403 });
     }
@@ -99,15 +112,32 @@ export async function POST(req: NextRequest) {
     const origin = req.headers.get('origin');
     const referer = req.headers.get('referer');
     const host = req.headers.get('host');
-    if (origin && !origin.includes(host || '')) {
-      return NextResponse.json({ error: 'invalid origin' }, { status: 403 });
+    if (host && origin) {
+      try {
+        if (new URL(origin).host.toLowerCase() !== host.toLowerCase()) {
+          return NextResponse.json({ error: 'invalid origin' }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'invalid origin' }, { status: 403 });
+      }
     }
-    if (referer && !referer.includes(host || '')) {
-      return NextResponse.json({ error: 'invalid referer' }, { status: 403 });
+    if (host && referer) {
+      try {
+        if (new URL(referer).host.toLowerCase() !== host.toLowerCase()) {
+          return NextResponse.json({ error: 'invalid referer' }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'invalid referer' }, { status: 403 });
+      }
     }
 
+    const ipCandidate = (req.headers.get('x-real-ip')?.trim()
+      || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || '').slice(0, 64);
+    const rawIp = isIP(ipCandidate) ? ipCandidate : '';
+
     // 速率限制（按 device_id）
-    if (isRateLimited(device_id)) {
+    if (isRateLimited(device_id) || (rawIp && isRateLimited(`ip:${rawIp}`, 100))) {
       return NextResponse.json({ ok: true, rate_limited: true });
     }
 
@@ -126,9 +156,7 @@ export async function POST(req: NextRequest) {
     const device = parsed.getDevice().type || 'Desktop';
     const deviceVendor = parsed.getDevice().vendor || '';
     const deviceModel = parsed.getDevice().model || '';
-    const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
-    // 后台直接展示完整 IP；另存哈希用于独立 IP 去重
-    const ip = rawIp;
+    const ip = maskIp(rawIp);
     const ipHash = hashIp(rawIp);
 
     const db = await getDatabase();
@@ -138,7 +166,7 @@ export async function POST(req: NextRequest) {
 
     const existing = await visitors.findOne(
       { device_id },
-      { projection: { last_session_id: 1, _id: 0 } },
+      { projection: { _id: 1 } },
     );
     const isNew = !existing;
 
@@ -154,7 +182,7 @@ export async function POST(req: NextRequest) {
       device_model: deviceModel,
       ip,
       ip_hash: ipHash,
-      ua,
+      ua: ua.slice(0, 1000),
     };
 
     if (rawIp) {
@@ -166,13 +194,13 @@ export async function POST(req: NextRequest) {
         setFields.ip_raw_expires = null;
       }
     }
-    if (page_title) setFields.page_title = page_title;
-    if (language) setFields.language = language;
-    if (languages) setFields.languages = languages;
-    if (screen) setFields.screen = screen;
-    if (viewport) setFields.viewport = viewport;
-    if (timezone) setFields.timezone = timezone;
-    if (tz_offset !== undefined && tz_offset !== '') setFields.tz_offset = tz_offset;
+    if (typeof page_title === 'string') setFields.page_title = page_title.slice(0, 200);
+    if (typeof language === 'string') setFields.language = language.slice(0, 64);
+    if (typeof languages === 'string') setFields.languages = languages.slice(0, 256);
+    if (typeof screen === 'string') setFields.screen = screen.slice(0, 32);
+    if (typeof viewport === 'string') setFields.viewport = viewport.slice(0, 32);
+    if (typeof timezone === 'string') setFields.timezone = timezone.slice(0, 64);
+    if (typeof tz_offset === 'string' && tz_offset.length <= 8) setFields.tz_offset = tz_offset;
 
     const insertFields: Record<string, unknown> = {
       first_seen: now,
@@ -182,50 +210,66 @@ export async function POST(req: NextRequest) {
     };
     // 来源只在首次写入，避免被后续心跳覆盖
     if (isNew && referrer !== undefined) {
-      insertFields.referrer = referrer || '';
-      insertFields.referrer_host = extractReferrerHost(referrer || '');
-    }
-
-    const incFields: Record<string, number> = {};
-    if (session_id) {
-      if (isNew) {
-        insertFields.session_count = 1;
-        insertFields.last_session_id = session_id;
-      } else if (!existing?.last_session_id || existing.last_session_id !== session_id) {
-        // 新会话：累加次数（字段不能同时出现在 $setOnInsert / $inc）
-        incFields.session_count = 1;
-        setFields.last_session_id = session_id;
-      }
+      insertFields.referrer_host = extractReferrerHost(typeof referrer === 'string' ? referrer : '');
     }
 
     const updateOps: Record<string, unknown> = {
       $set: setFields,
       $setOnInsert: insertFields,
     };
-    if (Object.keys(incFields).length > 0) {
-      updateOps.$inc = incFields;
+    try {
+      await visitors.updateOne({ device_id }, updateOps, { upsert: true });
+    } catch (error) {
+      if ((error as { code?: number })?.code !== 11000) throw error;
+      await visitors.updateOne({ device_id }, { $set: setFields });
     }
 
-    await visitors.updateOne({ device_id }, updateOps, { upsert: true });
+    if (session_id) {
+      const sessions = db.collection(COLLECTIONS.TRACK_SESSIONS);
+      let newSession = false;
+      try {
+        const result = await sessions.updateOne(
+          { device_id, session_id },
+          { $set: { last_seen: now }, $setOnInsert: { first_seen: now } },
+          { upsert: true },
+        );
+        newSession = result.upsertedCount > 0;
+      } catch (error) {
+        if ((error as { code?: number })?.code !== 11000) throw error;
+        await sessions.updateOne({ device_id, session_id }, { $set: { last_seen: now } });
+      }
+      if (newSession) await visitors.updateOne({ device_id }, { $inc: { session_count: 1 } });
+    }
 
-    // 页面切换时记录日志并累加 PV（同一路径的心跳不重复计）
-    const lastLog = await pageLogs.findOne(
-      { device_id },
-      { sort: { ts: -1 }, projection: { path: 1, _id: 0 } },
-    );
+    // Unique page_view_id makes retries and parallel tabs idempotent.
+    const logEntry: Record<string, unknown> = {
+      device_id,
+      path: current_page,
+      ts: now,
+    };
+    if (page_view_id) logEntry.page_view_id = page_view_id;
+    if (typeof page_title === 'string') logEntry.page_title = page_title.slice(0, 200);
+    if (session_id) logEntry.session_id = session_id;
+    const referrerHost = extractReferrerHost(typeof referrer === 'string' ? referrer : '');
+    if (referrerHost) logEntry.referrer_host = referrerHost;
 
-    const isPageChange = !lastLog || lastLog.path !== current_page;
-    if (isPageChange) {
-      const logEntry: Record<string, unknown> = {
-        device_id,
-        path: current_page,
-        ts: now,
-      };
-      if (page_title) logEntry.page_title = page_title;
-      if (session_id) logEntry.session_id = session_id;
-      if (referrer) logEntry.referrer = referrer;
-
-      await pageLogs.insertOne(logEntry);
+    let shouldCountPageView = false;
+    if (page_view_id) {
+      try {
+        await pageLogs.insertOne(logEntry);
+        shouldCountPageView = true;
+      } catch (error) {
+        if ((error as { code?: number })?.code !== 11000) throw error;
+      }
+    } else {
+      const lastLog = await pageLogs.findOne(
+        { device_id },
+        { sort: { ts: -1 }, projection: { path: 1, _id: 0 } },
+      );
+      shouldCountPageView = !lastLog || lastLog.path !== current_page;
+      if (shouldCountPageView) await pageLogs.insertOne(logEntry);
+    }
+    if (shouldCountPageView) {
       await visitors.updateOne({ device_id }, { $inc: { page_views: 1 } });
     }
 

@@ -142,6 +142,11 @@ async function initializeDatabase(db: Db) {
     await activeVisitors.createIndex({ device_id: 1 }, { unique: true });
     await activeVisitors.createIndex({ last_seen: -1 });
     await activeVisitors.createIndex({ ip_hash: 1 });
+    await activeVisitors.createIndex({ ip_raw_expires: 1 });
+
+    const trackSessions = db.collection(COLLECTIONS.TRACK_SESSIONS);
+    await trackSessions.createIndex({ device_id: 1, session_id: 1 }, { unique: true });
+    await trackSessions.createIndex({ last_seen: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 });
 
     // 强制清理旧的 TTL 索引（之前版本可能设置了过期时间）
     try {
@@ -158,6 +163,10 @@ async function initializeDatabase(db: Db) {
     // track_page_log: 设备页面浏览历史
     const pageLog = db.collection(COLLECTIONS.TRACK_PAGE_LOG);
     await pageLog.createIndex({ device_id: 1, ts: -1 });
+    await pageLog.createIndex(
+      { device_id: 1, page_view_id: 1 },
+      { unique: true, partialFilterExpression: { page_view_id: { $type: 'string' } } },
+    );
     await pageLog.createIndex({ ts: 1 }, { expireAfterSeconds: 86400 * 30 });
     await pageLog.createIndex({ session_id: 1 });
 

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession, validatePassword } from '@/lib/auth';
+import { createSession, isAdminPasswordConfigured, validatePassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAdminPasswordConfigured()) {
+      return NextResponse.json(
+        { error: '后台密码未配置，请设置 ADMIN_PASSWORD' },
+        { status: 503 },
+      );
+    }
     const { password } = await request.json();
 
     if (!password) {

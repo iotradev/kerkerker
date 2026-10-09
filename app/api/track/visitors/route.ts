@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { COLLECTIONS } from '@/lib/constants/db';
 import { requireAdmin } from '@/lib/require-admin';
+import { safeDisplayIp } from '@/lib/ip-utils';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -25,11 +26,10 @@ function toPublicVisitor(v: Record<string, unknown>) {
     device_model: v.device_model,
     browser: v.browser,
     browser_version: v.browser_version,
-    ip: v.ip,
+    ip: safeDisplayIp(typeof v.ip === 'string' ? v.ip : undefined),
     language: v.language,
     screen: v.screen,
     timezone: v.timezone,
-    referrer: v.referrer,
     referrer_host: v.referrer_host,
     page_views: v.page_views ?? 0,
     session_count: v.session_count ?? 0,
@@ -46,13 +46,22 @@ export async function GET(req: NextRequest) {
     const db = await getDatabase();
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') || '').trim();
+    const requestedPage = Number.parseInt(searchParams.get('page') || '1', 10);
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const pageSize = 100;
 
     const now = Date.now();
     const visitorsCol = db.collection(COLLECTIONS.ACTIVE_VISITORS);
 
     // 清理已过期的短时完整 IP
     await visitorsCol.updateMany(
-      { ip_raw_expires: { $lt: new Date() } },
+      {
+        ip_raw: { $exists: true, $nin: [null, ''] },
+        $or: [
+          { ip_raw_expires: { $lt: new Date() } },
+          { ip_raw_expires: { $exists: false } },
+        ],
+      },
       { $set: { ip_raw: null, ip_raw_expires: null } },
     );
 
@@ -75,15 +84,14 @@ export async function GET(req: NextRequest) {
     const visitors = await visitorsCol
       .find(searchFilter)
       .sort({ last_seen: -1 })
-      .limit(500)
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .toArray();
+    const onlineCutoff = new Date(now - 90_000);
 
-    const onlineCount = visitors.filter(
-      (v) => now - new Date(v.last_seen).getTime() < 35000,
-    ).length;
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const shanghaiNow = new Date(now + 8 * 60 * 60 * 1000);
+    shanghaiNow.setUTCHours(0, 0, 0, 0);
+    const todayStart = new Date(shanghaiNow.getTime() - 8 * 60 * 60 * 1000);
 
     const [
       todayVisitors,
@@ -92,6 +100,8 @@ export async function GET(req: NextRequest) {
       allTimeTotal,
       uniqueHashCount,
       totalPageViews,
+      matchingTotal,
+      onlineCount,
     ] = await Promise.all([
       visitorsCol.countDocuments({ last_seen: { $gte: todayStart } }),
       visitorsCol.countDocuments({ first_seen: { $gte: todayStart } }),
@@ -105,13 +115,21 @@ export async function GET(req: NextRequest) {
       visitorsCol
         .aggregate([{ $group: { _id: null, total: { $sum: { $ifNull: ['$page_views', 0] } } } }])
         .toArray(),
+      visitorsCol.countDocuments(searchFilter),
+      visitorsCol.countDocuments({ last_seen: { $gte: onlineCutoff } }),
     ]);
 
     return NextResponse.json({
       visitors: visitors.map(toPublicVisitor),
+      pagination: {
+        page,
+        page_size: pageSize,
+        matching_total: matchingTotal,
+        total_pages: Math.ceil(matchingTotal / pageSize),
+      },
       stats: {
         online: onlineCount,
-        total: visitors.length,
+        total: allTimeTotal,
         today: todayVisitors,
         today_new: todayNew,
         today_returning: todayReturning,

@@ -21,6 +21,11 @@ export function hashIp(ip: string): string {
   return createHash('sha256').update(ip).digest('hex');
 }
 
+/** Mask database values too, so legacy records cannot expose full addresses. */
+export function safeDisplayIp(ip: string | undefined): string {
+  return maskIp(ip || '');
+}
+
 /** 是否存储短时完整 IP（默认关闭） */
 export function shouldStoreFullIp(): boolean {
   const v = (process.env.TRACK_STORE_FULL_IP || '').toLowerCase();
@@ -41,20 +46,16 @@ export function fullIpExpiresAt(from: Date = new Date()): Date {
 /** 供 API 返回的访客视图：永不吐出 ip_raw */
 export function publicIpFields(doc: {
   ip?: string;
-  ip_hash?: string;
   ip_raw?: string;
   ip_raw_expires?: Date | string;
 }): {
   ip: string;
-  ip_hash?: string;
   has_full_ip: boolean;
 } {
   const expires = doc.ip_raw_expires ? new Date(doc.ip_raw_expires).getTime() : 0;
   const fullAlive = !!doc.ip_raw && expires > Date.now();
   return {
-    ip: doc.ip || '',
-    // 列表不暴露哈希全文时可截断；统计/管理保留完整哈希便于检索
-    ip_hash: doc.ip_hash,
+    ip: maskIp(doc.ip || ''),
     has_full_ip: fullAlive,
   };
 }

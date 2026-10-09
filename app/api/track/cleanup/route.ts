@@ -12,31 +12,25 @@ export async function POST() {
 
     const botFilter = {
       $or: [
-        { browser: 'Chrome Headless' },
-        { os: { $in: ['', null] }, device: { $in: ['', null] }, browser: { $in: ['', null] } },
+        { browser: /headless/i },
+        { ua: /headless|bot|crawl|spider|scrape|slurp|facebook|twitter|discord|telegram|whatsapp/i },
       ],
     };
-
-    const delVisitors = await db.collection(COLLECTIONS.ACTIVE_VISITORS).deleteMany(botFilter);
-    const delLogs = await db.collection(COLLECTIONS.TRACK_PAGE_LOG).deleteMany(botFilter);
-
-    // 删除 active_visitors 上所有残留的 TTL 索引
-    try {
-      const indexes = await db.collection(COLLECTIONS.ACTIVE_VISITORS).indexes();
-      for (const idx of indexes) {
-        if (idx.expireAfterSeconds) {
-          if (idx.name) await db.collection(COLLECTIONS.ACTIVE_VISITORS).dropIndex(idx.name);
-        }
-      }
-    } catch {
-      // 旧索引可能已被删除，忽略错误
+    const visitors = db.collection(COLLECTIONS.ACTIVE_VISITORS);
+    const botDevices = await visitors.find(botFilter).project({ device_id: 1, _id: 0 }).toArray();
+    const deviceIds = botDevices.map((visitor) => visitor.device_id);
+    const delVisitors = await visitors.deleteMany(botFilter);
+    const delLogs = deviceIds.length
+      ? await db.collection(COLLECTIONS.TRACK_PAGE_LOG).deleteMany({ device_id: { $in: deviceIds } })
+      : { deletedCount: 0 };
+    if (deviceIds.length) {
+      await db.collection(COLLECTIONS.TRACK_SESSIONS).deleteMany({ device_id: { $in: deviceIds } });
     }
 
     return NextResponse.json({
       ok: true,
       deleted_visitors: delVisitors.deletedCount,
       deleted_logs: delLogs.deletedCount,
-      ttl_index_dropped: true,
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });

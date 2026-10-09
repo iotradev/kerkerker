@@ -14,6 +14,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ d
     const db = await getDatabase();
     const del = await db.collection(COLLECTIONS.ACTIVE_VISITORS).deleteOne({ device_id });
     const delLogs = await db.collection(COLLECTIONS.TRACK_PAGE_LOG).deleteMany({ device_id });
+    await db.collection(COLLECTIONS.TRACK_SESSIONS).deleteMany({ device_id });
 
     return NextResponse.json({
       ok: true,

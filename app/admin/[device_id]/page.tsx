@@ -45,7 +45,6 @@ interface Device {
   viewport?: string;
   timezone?: string;
   tz_offset?: string;
-  referrer?: string;
   referrer_host?: string;
   ua?: string;
   page_views?: number;
@@ -57,7 +56,7 @@ interface PageLogEntry {
   page_title?: string;
   ts: string;
   session_id?: string;
-  referrer?: string;
+  referrer_host?: string;
 }
 
 interface Insights {
@@ -326,10 +325,10 @@ export default function DeviceDetailPage() {
                           {log.page_title || log.path}
                         </div>
                         <div className="font-mono text-[11px] text-[#666] truncate mt-0.5">{log.path}</div>
-                        {log.referrer && (
+                        {log.referrer_host && (
                           <div className="text-[10px] text-[#808080] mt-1 flex items-center gap-1">
                             <Link2 size={10} />
-                            来自 {hostOf(log.referrer)}
+                            来自 {log.referrer_host}
                           </div>
                         )}
                       </div>
@@ -412,14 +411,6 @@ function formatDuration(ms: number): string {
   if (hours < 24) return rest ? `${hours} 小时 ${rest} 分` : `${hours} 小时`;
   const days = Math.floor(hours / 24);
   return `${days} 天 ${hours % 24} 小时`;
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 }
 
 function fmtTime(date: string | Date): string {

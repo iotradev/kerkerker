@@ -67,6 +67,8 @@ const REFRESH_INTERVAL = 15000;
 export default function AdminPage() {
   const router = useRouter();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageInfo, setPageInfo] = useState({ page: 1, total_pages: 0, matching_total: 0 });
   const [stats, setStats] = useState<Stats>({ online: 0, total: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -79,7 +81,10 @@ export default function AdminPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -87,6 +92,7 @@ export default function AdminPage() {
     try {
       const params = new URLSearchParams();
       if (debouncedQuery) params.set('q', debouncedQuery);
+      params.set('page', String(page));
       const qs = params.toString();
       const res = await fetch(`/api/track/visitors${qs ? `?${qs}` : ''}`, {
         cache: 'no-store',
@@ -99,12 +105,17 @@ export default function AdminPage() {
       const data = await res.json();
       setVisitors(data.visitors || []);
       setStats(data.stats || { online: 0, total: 0, today: 0 });
+      setPageInfo(data.pagination || { page, total_pages: 0, matching_total: 0 });
       setLastUpdate(new Date());
     } catch {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, router]);
+  }, [debouncedQuery, page, router]);
+
+  useEffect(() => {
+    if (pageInfo.total_pages > 0 && page > pageInfo.total_pages) setPage(pageInfo.total_pages);
+  }, [page, pageInfo.total_pages]);
 
   const handleDelete = (deviceId: string) => {
     setConfirm({
@@ -118,12 +129,7 @@ export default function AdminPage() {
           const res = await fetch(`/api/track/${deviceId}/delete`, { method: 'DELETE' });
           const data = await res.json();
           if (data.ok) {
-            setVisitors((prev) => prev.filter((v) => v.device_id !== deviceId));
-            setStats((prev) => ({
-              ...prev,
-              total: Math.max(0, prev.total - 1),
-              all_time: Math.max(0, (prev.all_time ?? 0) - 1),
-            }));
+            fetchVisitors();
             setToast({ message: '已删除访客记录', type: 'success' });
           } else {
             setToast({ message: data.error || '删除失败', type: 'error' });
@@ -271,7 +277,7 @@ export default function AdminPage() {
             accent="text-emerald-400"
             highlight
           />
-          <KpiCard icon={<Eye size={16} className="text-white" />} label="总记录" value={stats.total} />
+          <KpiCard icon={<Eye size={16} className="text-white" />} label="访客总数" value={stats.total} />
           <KpiCard
             icon={<Users size={16} className="text-blue-400" />}
             label="今日"
@@ -292,8 +298,8 @@ export default function AdminPage() {
           />
           <KpiCard
             icon={<History size={16} className="text-[#808080]" />}
-            label="累计设备"
-            value={stats.all_time ?? 0}
+            label="匹配访客"
+            value={pageInfo.matching_total}
             accent="text-[#b3b3b3]"
           />
           <KpiCard
@@ -338,6 +344,7 @@ export default function AdminPage() {
             </p>
           </div>
         ) : (
+          <>
           <div className="bg-[#1a1a1a] rounded-xl border border-[#333] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -361,7 +368,7 @@ export default function AdminPage() {
                   {visitors.map((v) => {
                     const lastSeen = new Date(v.last_seen).getTime();
                     const secondsAgo = Math.floor((now - lastSeen) / 1000);
-                    const isOnline = secondsAgo <= 35;
+                    const isOnline = secondsAgo <= 90;
 
                     return (
                       <tr
@@ -481,6 +488,31 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#333] px-4 py-3 text-xs text-[#808080]">
+            <span>
+              显示 {pageInfo.matching_total === 0 ? 0 : (page - 1) * 100 + 1}–{Math.min(page * 100, pageInfo.matching_total)} / {pageInfo.matching_total} 条
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                disabled={page <= 1}
+                className="rounded border border-[#444] px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span>第 {page} / {Math.max(1, pageInfo.total_pages)} 页</span>
+              <button
+                type="button"
+                onClick={() => setPage((value) => value + 1)}
+                disabled={pageInfo.total_pages === 0 || page >= pageInfo.total_pages}
+                className="rounded border border-[#444] px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </main>
 
