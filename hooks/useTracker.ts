@@ -2,11 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-
-const BOT_RE = /bot|crawl|spider|scrape|slurp|facebook|twitter|discord|telegram|whatsapp/i;
+import { isLikelyBotUa } from '@/lib/track/bot-filter';
 
 const HEARTBEAT_INTERVAL = 30_000;
 const DEBOUNCE_DELAY = 500;
+/** 上报失败后的重试延迟与队列上限（page_view_id 服务端幂等，重复上报不会重复计数） */
+const RETRY_DELAY = 3_000;
+const RETRY_QUEUE_MAX = 10;
 
 function createId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -52,14 +54,14 @@ function getPageLabel(path: string, title?: string): string {
   if (path.startsWith('/play/')) return '播放页';
   if (path.startsWith('/category/')) return '分类浏览';
   if (path.startsWith('/browse/')) return '分类浏览';
-  if (path.startsWith('/history/')) return '观看历史';
+  if (path.startsWith('/history')) return '观看历史';
   if (path.startsWith('/shorts')) return '短剧';
   return path;
 }
 
 function isBot(): boolean {
   if (typeof navigator === 'undefined') return true;
-  return BOT_RE.test(navigator.userAgent);
+  return isLikelyBotUa(navigator.userAgent);
 }
 
 function getDeviceId(): string {
@@ -117,17 +119,55 @@ export function useTracker(title?: string) {
   const lastPageRef = useRef<string>('');
   const lastTitleRef = useRef<string | undefined>(undefined);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 防抖已排期但尚未发送的浏览（切换页面时补发，避免快速跳出漏记） */
+  const pendingRef = useRef<{ path: string; title?: string; sent: boolean } | null>(null);
+  const retryQueueRef = useRef<Record<string, string>[]>([]);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isBot()) return;
     deviceIdRef.current = getDeviceId();
   }, []);
 
-  const sendHeartbeat = (page: string, t?: string) => {
+  /** 上报一次；失败时进入重试队列（page_view_id 幂等，重复上报不会重复计数） */
+  const postEvent = (body: Record<string, string>) => {
+    fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {
+      if (retryQueueRef.current.length < RETRY_QUEUE_MAX) {
+        retryQueueRef.current.push(body);
+      }
+      if (retryTimerRef.current) return;
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
+        const pending = retryQueueRef.current.splice(0);
+        pending.forEach((item) => {
+          fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+            keepalive: true,
+          }).catch(() => {
+            // 二次失败放弃，避免无限重试
+          });
+        });
+      }, RETRY_DELAY);
+    });
+  };
+
+  /** 发送指定页面的浏览事件；page_view_id 按路径分配，服务端按唯一索引去重 */
+  const sendPageView = (page: string, pageTitle?: string) => {
     const device_id = deviceIdRef.current;
     if (!device_id) return;
 
-    const label = getPageLabel(page, t);
+    if (pageViewRef.current.path !== page) {
+      pageViewRef.current = { path: page, id: createId() };
+    }
+
+    const label = getPageLabel(page, pageTitle);
     const body: Record<string, string> = {
       device_id,
       current_page: page,
@@ -138,12 +178,26 @@ export function useTracker(title?: string) {
       ...getClientMeta(),
     };
 
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      keepalive: true,
-    }).catch(() => {});
+    postEvent(body);
+  };
+
+  /** 发送当前页心跳（复用已有 page_view_id，只刷新 last_seen） */
+  const sendHeartbeat = (page: string, pageTitle?: string) => {
+    const device_id = deviceIdRef.current;
+    if (!device_id) return;
+
+    const label = getPageLabel(page, pageTitle);
+    const body: Record<string, string> = {
+      device_id,
+      current_page: page,
+      page_view_id: pageViewRef.current.id,
+      page_title: label,
+      track_token: getTrackToken(),
+      session_id: getSessionId(fallbackSessionIdRef.current),
+      ...getClientMeta(),
+    };
+
+    postEvent(body);
   };
 
   useEffect(() => {
@@ -151,25 +205,50 @@ export function useTracker(title?: string) {
     if (isAdminPath(page)) return;
     if (page === lastPageRef.current && title === lastTitleRef.current) return;
 
+    // 防抖尚未触发就被切到其他页面：立即补发被取消的浏览记录
+    const prev = pendingRef.current;
+    if (prev && !prev.sent && prev.path !== page) {
+      prev.sent = true;
+      sendPageView(prev.path, prev.title);
+    }
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
+    pendingRef.current = { path: page, title, sent: false };
     debounceTimerRef.current = setTimeout(() => {
       lastPageRef.current = page;
       lastTitleRef.current = title;
-      if (pageViewRef.current.path !== page) {
-        pageViewRef.current = { path: page, id: createId() };
+      if (pendingRef.current && pendingRef.current.path === page) {
+        pendingRef.current.sent = true;
       }
-      sendHeartbeat(page, title);
+      sendPageView(page, title);
     }, DEBOUNCE_DELAY);
 
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [pathname, title]);
+
+  // 组件卸载（应用整体离开）时补发未上报的浏览；beforeunload 覆盖硬跳转
+  useEffect(() => {
+    return () => {
+      const prev = pendingRef.current;
+      if (prev && !prev.sent) {
+        prev.sent = true;
+        sendPageView(prev.path, prev.title);
+      }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isBot() || isAdminPath(pathname)) return;
@@ -182,12 +261,13 @@ export function useTracker(title?: string) {
   }, [pathname, title]);
 
   useEffect(() => {
+    if (isBot() || isAdminPath(pathname)) return;
+
     const handleBeforeUnload = () => {
-      if (isAdminPath(pathname)) return;
       sendHeartbeat(pathname, title);
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && !isAdminPath(pathname)) {
+      if (document.visibilityState === 'hidden') {
         sendHeartbeat(pathname, title);
       }
     };

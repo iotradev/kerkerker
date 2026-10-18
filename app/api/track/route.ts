@@ -9,8 +9,7 @@ import {
   fullIpExpiresAt,
 } from '@/lib/ip-utils';
 import { UAParser } from 'ua-parser-js';
-
-const BOT_RE = /bot|crawl|spider|scrape|slurp|facebook|twitter|discord|telegram|whatsapp/i;
+import { isLikelyBotUa } from '@/lib/track/bot-filter';
 
 /** 有效页面路径模式 */
 const VALID_PATH_PATTERNS = [
@@ -144,7 +143,7 @@ export async function POST(req: NextRequest) {
     const ua = req.headers.get('user-agent') || '';
 
     // 后端 Bot 过滤
-    if (BOT_RE.test(ua)) {
+    if (isLikelyBotUa(ua)) {
       return NextResponse.json({ ok: true, bot: true });
     }
 
